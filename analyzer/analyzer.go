@@ -1,4 +1,4 @@
-﻿// Copyright 2016 Google Inc. All Rights Reserved.
+// Copyright 2016 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"regexp"
 	"strings"
@@ -181,6 +182,15 @@ type ParsedData struct {
 	kd          *csvData
 	md          *csvData
 	data        []presenter.HTMLData
+
+	// skipPlot, when true, disables generation of the Historian HTML plot so
+	// that parsing can run without the Python dependency. Used by the
+	// Analysis Core facade (MCP / programmatic consumption).
+	skipPlot bool
+	// drawPlot, when true (and skipPlot is false), lets the Historian python
+	// script emit its interactive chart (drops the "-c" disable-chart flag).
+	// Used by the MCP chart resource (P3-B).
+	drawPlot bool
 }
 
 // BatteryStatsInfo holds the extracted batterystats details for a bugreport.
@@ -688,6 +698,12 @@ func (pd *ParsedData) parseBugReport(fnameA, contentsA, fnameB, contentsB string
 	}
 
 	doHistorian := func(ch chan historianData, fname, contents string) {
+		if pd.skipPlot {
+			// Analysis Core (MCP / programmatic) mode: skip the Historian
+			// HTML plot entirely so no Python dependency is required.
+			ch <- historianData{}
+			return
+		}
 		// Create a temporary file to save the bug report, for the Historian script.
 		brFile, err := writeTempFile(contents)
 		if err != nil {
@@ -696,7 +712,7 @@ func (pd *ParsedData) parseBugReport(fnameA, contentsA, fnameB, contentsB string
 		}
 		// Don't run the Historian script if it could not create temporary file.
 		defer os.Remove(brFile)
-		html, err := generateHistorianPlot(fname, brFile)
+		html, err := generateHistorianPlot(fname, brFile, pd.drawPlot)
 		ch <- historianData{html, err}
 		log.Printf("Trace finished generating Historian plot.")
 	}
@@ -1020,13 +1036,31 @@ func analyze(bugReport string, pkgs []*usagepb.PackageInfo) summariesData {
 }
 
 // generateHistorianPlot calls the Historian python script to generate html charts.
-func generateHistorianPlot(reportName, filepath string) (string, error) {
-	return historianutils.RunCommand("python", scriptsPath(scriptsDir, "historian.py"), "-c", "-m", "-r", reportName, filepath)
+// When drawChart is false the "-c" (disable chart drawing) flag is passed, which
+// matches the original web-server behavior (the Historian v2 JS app does its own
+// rendering). When drawChart is true the script emits its interactive chart, used
+// by the MCP chart resource (P3-B).
+func generateHistorianPlot(reportName, filepath string, drawChart bool) (string, error) {
+	args := []string{scriptsPath(scriptsDir, "historian.py"), "-m", "-r", reportName, filepath}
+	if !drawChart {
+		args = append([]string{"-c"}, args...)
+	}
+	return historianutils.RunCommand(pythonBin(), args...)
 }
 
 // generateKernelCSV calls the python script to convert kernel trace files into a CSV format parseable by kernel.Parse.
 func generateKernelCSV(bugReportPath, tracePath, model string) (string, error) {
-	return historianutils.RunCommand("python", scriptsPath(scriptsDir, "kernel_trace.py"), "--bugreport", bugReportPath, "--trace", tracePath, "--device", model)
+	return historianutils.RunCommand(pythonBin(), scriptsPath(scriptsDir, "kernel_trace.py"), "--bugreport", bugReportPath, "--trace", tracePath, "--device", model)
+}
+
+// pythonBin returns the Python interpreter to use for the legacy Historian
+// scripts. It prefers "python3" (the migrated scripts target Python 3) and falls
+// back to "python" for environments where only that name is available.
+func pythonBin() string {
+	if p, err := exec.LookPath("python3"); err == nil {
+		return p
+	}
+	return "python"
 }
 
 // batteryTime extracts the battery time info from a bug report.

@@ -21,6 +21,22 @@ import (
 	"strconv"
 )
 
+// parseIntOrFloat parses s as a base-10 integer. If s is not a valid integer
+// (for example it carries a fractional part such as "0.0", which newer
+// Android releases emit for some batterystats fields like power in mAh), it
+// falls back to parsing s as a float and truncating to an integer. This keeps
+// parsing robust against format changes where integer fields become floats.
+func parseIntOrFloat(s string, bitSize int) (int64, error) {
+	if n, err := strconv.ParseInt(s, 10, bitSize); err == nil {
+		return n, nil
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, fmt.Errorf("could not parse %q as integer or float", s)
+	}
+	return int64(f), nil
+}
+
 // Consume parses len(output) elements of input into their respective output
 // variables.  Each output must be a pointer to a supported type.  What is
 // stored to the output depends on its type:
@@ -54,13 +70,13 @@ func Consume(input []string, output ...interface{}) (remaining []string, err err
 				*out = input[i]
 			}
 		case *int32:
-			if n, err := strconv.ParseInt(input[i], 10, 32); err != nil {
+			if n, err := parseIntOrFloat(input[i], 32); err != nil {
 				return nil, err
 			} else if out != nil {
 				*out = int32(n)
 			}
 		case *int64:
-			if n, err := strconv.ParseInt(input[i], 10, 64); err != nil {
+			if n, err := parseIntOrFloat(input[i], 64); err != nil {
 				return nil, err
 			} else if out != nil {
 				*out = n

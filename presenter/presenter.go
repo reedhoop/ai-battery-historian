@@ -1,4 +1,4 @@
-﻿// Copyright 2016 Google Inc. All Rights Reserved.
+// Copyright 2016 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -415,8 +415,10 @@ func (a byMobileMegaBytesPerHourDiff) Less(i, j int) bool {
 	return abs(x) >= abs(y)
 }
 
-// combineCheckinData combines the Checkin data for the two files being compared in to one common struct.
-func combineCheckinData(data []HTMLData) CombinedCheckinSummary {
+// CombineCheckinData combines the Checkin data for the two files being compared
+// in to one common struct. Exported so the Analysis Core facade can build the
+// A/B diff for the MCP compare tool.
+func CombineCheckinData(data []HTMLData) CombinedCheckinSummary {
 	// Maps to merge the two individual data by application name.
 	topBat := make(map[string]PowerUseDataDiff)
 	uWl := make(map[string]ActivityDataDiff)
@@ -760,7 +762,7 @@ func combineCheckinData(data []HTMLData) CombinedCheckinSummary {
 func MultiFileData(data []HTMLData) MultiFileHTMLData {
 	var m MultiFileHTMLData
 	m.MinSDKVersion = math.MaxInt32
-	m.CombinedCheckinData = combineCheckinData(data)
+	m.CombinedCheckinData = CombineCheckinData(data)
 
 	for _, value := range data {
 		m.SDKVersion = append(m.SDKVersion, value.SDKVersion)

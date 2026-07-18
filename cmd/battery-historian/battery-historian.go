@@ -1,4 +1,4 @@
-﻿// Copyright 2016 Google Inc. All Rights Reserved.
+// Copyright 2016 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,13 @@ var (
 
 	// resVersion should be incremented whenever the JS or CSS files are modified.
 	resVersion = flag.Int("res_version", 2, "The current version of JS and CSS files. Used to force JS and CSS reloading to avoid cache issues when rolling out new versions.")
+
+	// Phase 2 (native MCP) flags.
+	mcpMode       = flag.Bool("mcp", false, "Run as an MCP server (stdio) instead of the HTTP web server.")
+	mcpTransport  = flag.String("mcp_transport", "stdio", "MCP transport when --mcp is set: stdio | http.")
+	mcpAddr       = flag.String("mcp_addr", ":8080", "Listen address when --mcp_transport=http.")
+	mcpMaxEntries = flag.Int("mcp_max_entries", 20, "Max cached analyses in the MCP store (LRU eviction).")
+	mcpWithChart  = flag.Bool("mcp_with_chart", false, "Generate the Historian plot HTML at analyze time so it can be served via bugreport://{id}/chart (requires Python 3 + scripts/historian.py).")
 )
 
 type analysisServer struct{}
@@ -114,6 +121,17 @@ func initFrontend() {
 
 func main() {
 	flag.Parse()
+
+	// Phase 2: native MCP mode runs the analysis core in-process and skips the
+	// HTTP web server (and the Python plot). It is mutually exclusive with the
+	// Historian v2 web UI.
+	if *mcpMode {
+		// Honor --scripts_dir so the chart subprocess can locate
+		// scripts/historian.py regardless of the current working directory.
+		analyzer.SetScriptsDir(*scriptsDir)
+		startMCPServer(*mcpTransport, *mcpAddr, *mcpMaxEntries)
+		return
+	}
 
 	initFrontend()
 	analyzer.InitTemplates(*templateDir)

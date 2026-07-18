@@ -1978,9 +1978,26 @@ func parseAppWifi(record []string, app *bspb.BatteryStats_App) (string, []error)
 // parseControllerData parses any output that describes controller activity.
 //
 // format: <idle_time>, <rx_time>, <power_ma_ms>, tx_time...
+// parseIntOrFloat parses s as a base-10 integer, falling back to a truncated
+// float when the value carries a fractional part (e.g. "0.0", which newer
+// Android releases emit for some batterystats fields). Mirrors the tolerant
+// behaviour of sliceparse.Consume for the transmit-level times parsed here.
+func parseIntOrFloat(s string, bitSize int) (int64, error) {
+	if n, err := strconv.ParseInt(s, 10, bitSize); err == nil {
+		return n, nil
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, fmt.Errorf("could not parse %q as integer or float", s)
+	}
+	return int64(f), nil
+}
+
 func parseControllerData(pc checkinutil.Counter, section string, record []string) (*bspb.BatteryStats_ControllerActivity, error) {
 	// 新版 Android (checkin version >= 22) 的 gmcd/gwcd/gbcd 数据中
-	// power_ma_ms 字段可能为浮点数（如 "0.0"），因此用 float64 解析再转 int64。
+	// idle/rx/power_ma_ms 字段可能为浮点数（如 "0.0"），原 int64 解析会失败
+	// 并导致整个 aggregated battery stats 返回 nil。
+	// 这里用 float64 解析再转 int64，与 parseIntOrFloat 的容忍策略保持一致。
 	var idle, rx, pwr float64
 	rem, err := parseSlice(pc, section, record, &idle, &rx, &pwr)
 	if err != nil {
@@ -1995,18 +2012,13 @@ func parseControllerData(pc checkinutil.Counter, section string, record []string
 		PowerMah:     proto.Int64(int64(pwr)),
 	}
 	for i, t := range rem {
-		// 兼容浮点数（如 "0.0"），先试 int，失败再试 float
-		tm, err := strconv.Atoi(t)
+		tm, err := parseIntOrFloat(t, 64)
 		if err != nil {
-			f, ferr := strconv.ParseFloat(t, 64)
-			if ferr != nil {
-				return nil, fmt.Errorf("%s contained invalid transmit value %q: %v", section, t, ferr)
-			}
-			tm = int(f)
+			return nil, fmt.Errorf("%s contained invalid transmit value: %v", section, err)
 		}
 		c.Tx = append(c.Tx, &bspb.BatteryStats_ControllerActivity_TxLevel{
 			Level:    proto.Int32(int32(i)),
-			TimeMsec: proto.Int64(int64(tm)),
+			TimeMsec: proto.Int64(tm),
 		})
 	}
 	return c, nil

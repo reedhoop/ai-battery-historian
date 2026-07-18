@@ -1,4 +1,11 @@
-# Battery Historian
+# Battery Historian (ai-battery-historian fork)
+
+> 本仓库是 Google [battery-historian](https://github.com/google/battery-historian) 的 fork，在原版基础上做了以下增强：
+>
+> - **Go module 化**：module 路径 `github.com/reedhoop/ai-battery-historian`，go 1.25.5，告别 GOPATH。
+> - **新版 Android bugreport 兼容**：修复 checkin version 36（Android 11+）解析失败问题（`parseControllerData` 浮点格式整数兜底）。
+> - **国内 CDN 镜像**：模板中 jQuery / Bootstrap 等前端资源改用 bootcdn.net，避免国外 CDN 加载失败。
+> - **MCP 协议支持**：通过 [mark3labs/mcp-go](https://github.com/mark3labs/mcp-go) 暴露 Tool / Resource / Prompt 三类原语，让 AI 助手（Claude / WorkBuddy / Cursor 等）直接消费 Battery Historian 的解析能力。详见 [MCP可行性评估.md](MCP可行性评估.md) / [MCP概要设计.md](MCP概要设计.md) / [MCP需求矩阵.md](MCP需求矩阵.md)。
 
 Battery Historian is a tool to inspect battery related information and events on an Android device running Android 5.0 Lollipop (API level 21) and later, while the device was not plugged in. It allows application developers to visualize system and application level events on a timeline with panning and zooming functionality, easily see various aggregated statistics since the device was last fully charged, and select an application and inspect the metrics that impact battery specific to the chosen application. It also allows an A/B comparison of two bugreports, highlighting differences in key battery related metrics.
 
@@ -34,56 +41,57 @@ documentation](<https://docs.docker.com/engine/reference/run/#/expose-incoming-p
 
 #### Building from source code
 
-Make sure you have at least Golang version 1.8.1:
+> **本 fork 已 Go module 化**，不再依赖 GOPATH。建议 Go 1.21+（实测 go 1.25.5）。
 
-* Follow the instructions available at <http://golang.org/doc/install> for downloading and installing the Go compilers, tools, and libraries.
-* Create a workspace directory according to the instructions at
-  <http://golang.org/doc/code.html#Organization>.
-* Ensure that `GOPATH` and `GOBIN` environment variables are appropriately set and added to your `$PATH`
-  environment variable. `$GOBIN should be set to $GOPATH/bin`.
-  * For Windows, you may set environment variables through the "Environment Variables" button on the
-  "Advanced" tab of the "System" control panel. Some versions of Windows provide this control panel
-  through the "Advanced System Settings" option inside the "System" control panel.
-  * For Linux and Mac OS X, you can add the following lines to your ~/.bashrc or
-    ~/.profile files (assuming your workspace is $HOME/work):
+##### 1. 准备环境
 
-      ```
-      export GOPATH=$HOME/work
-      export GOBIN=$GOPATH/bin
-      export PATH=$PATH:$GOBIN
-      ```
+- **Go**：1.21+（推荐 1.25.5）。安装见 <https://go.dev/doc/install>。
+- **Git**：<https://git-scm.com/downloads>。
+- **Java**：用于 Closure 编译器打包前端 JS。<http://www.oracle.com/technetwork/java/javase/downloads/index.html>。
+- **Python**（可选）：仅生成 Historian v2 时间轴图表 HTML 需要。
+  - 旧版 fork 时期要求 Python 2.7，但**核心耗电统计不依赖 Python**。
+  - 走 MCP 路径（见下文 §MCP）或 `--mcp` 模式时可彻底跳过 Python。
+  - 若仍想生成 legacy Format:1 报告的 Historian 风格图表，需要 Python 3 + 已迁移到 py3 的 `scripts/historian.py`（注：Python 3 迁移未在 P3 范围内完成，默认 `scripts/historian.py` 仍是 Python 2.7 语法）。
 
-Next, install Git from <https://git-scm.com/downloads> if it's not already installed.
-
-Next, make sure Python 2.7 (NOT Python 3!) is installed. See <https://python.org/downloads>
-if it isn't, and ensure that python is added to your `$PATH` environment variable.
-
-Next, install Java from <http://www.oracle.com/technetwork/java/javase/downloads/index.html>.
-
-Next, download the Battery Historian code and its dependencies:
+##### 2. 拉取代码
 
 ```
-$ go get -d -u github.com/google/battery-historian/...
+$ git clone https://github.com/reedhoop/ai-battery-historian.git
+$ cd ai-battery-historian
 ```
 
-Finally, run Battery Historian!
+##### 3. 编译前端 JS（一次性）
 
 ```
-$ cd $GOPATH/src/github.com/google/battery-historian
-
-# Compile Javascript files using the Closure compiler
 $ go run setup.go
-
-# Run Historian on your machine (make sure $PATH contains $GOBIN)
-$ go run cmd/battery-historian/battery-historian.go [--port <default:9999>]
 ```
 
-Remember, you must always run battery-historian from inside the `$GOPATH/src/github.com/google/battery-historian` directory:
+这会调用 Closure 编译器把 `js/` 下的源文件打包为 `compiled/` 下的 `historian.js` 等产物。
+
+##### 4. 运行 HTTP 服务（Web UI 模式）
 
 ```
-cd $GOPATH/src/github.com/google/battery-historian
-go run cmd/battery-historian/battery-historian.go [--port <default:9999>]
+# 默认端口 9999
+$ go run cmd/battery-historian/battery-historian.go --port 9999
+
+# 或编译为二进制
+$ go build -o battery-historian ./cmd/battery-historian
+$ ./battery-historian --port 9999
 ```
+
+打开 <http://localhost:9999> 上传 bugreport 即可分析。
+
+> **Windows + 国内网络建议**：首次构建需拉取 `golang/protobuf` / `mark3labs/mcp-go` 等依赖，可设置国内代理加速：
+> ```powershell
+> $env:GOPROXY = "https://goproxy.cn,direct"
+> $env:GOSUMDB = "sum.golang.org"
+> ```
+
+##### 5. 新版 Android bugreport 兼容性说明
+
+本 fork 修复了 checkin version 36（Android 11+）bugreport 解析问题：原版 `parseControllerData` 严格按整数解析，遇到浮点格式整数字段（如 `0.0`）会失败，导致 "Could not parse aggregated battery stats" 错误。本 fork 改为「先尝试整数转换，失败再按 float 解析后转 int64」，可正确解析 2026 年新版 Android bugreport。
+
+> 已知遗留：少量新 history key（如 `Mrc` / `Esc` / `Chtp`）仍会打印 "Unknown history key" 警告，但不影响主流程解析与时间轴绘制。
 
 
 #### How to take a bug report
@@ -107,6 +115,72 @@ $ adb bugreport > bugreport.txt
 
 You are all set now. Run `historian` and visit <http://localhost:9999> and
 upload the `bugreport.txt` file to start analyzing.
+
+## MCP 模式（AI 助手接入）
+
+本 fork 通过 [mark3labs/mcp-go](https://github.com/mark3labs/mcp-go) 把 Battery Historian 的解析能力暴露为 [MCP (Model Context Protocol)](https://modelcontextprotocol.io) 原语，让 AI 助手（Claude / WorkBuddy / Cursor 等）直接消费。提供两套并行实现，Form B 是 Form A 的功能超集。
+
+### Form B：原生嵌入（推荐）
+
+`cmd/battery-historian` 加 `--mcp` 标志启动内嵌 MCP server，进程内直调 `analyzer.Analyze` / `analyzer.Compare`，**完全不依赖 Python**。
+
+```
+# stdio 传输（默认，对接 Claude Desktop / WorkBuddy 本地客户端）
+$ go run cmd/battery-historian/battery-historian.go --mcp
+
+# streamable HTTP 传输（对接远程客户端）
+$ go run cmd/battery-historian/battery-historian.go --mcp --mcp_transport=http --mcp_addr=:8080
+
+# 可选：同时生成 Historian 风格图表（需 Python 3 + 已迁移的 historian.py）
+$ go run cmd/battery-historian/battery-historian.go --mcp --mcp_with_chart
+```
+
+**已注册能力（v0.2.0）**：9 tools / 6 resources / 3 prompts。
+
+| 类别 | 名称 | 说明 |
+|---|---|---|
+| Tool | `analyze_bugreport` | 解析单个 bugreport（path 或 base64 content） |
+| Tool | `compare_bugreports` | A/B 差分两个 bugreport |
+| Tool | `query_system_stats` | 系统级聚合指标（`aggregated.Checkin`） |
+| Tool | `query_app_stats` | 应用级耗电（Top-N / 指定 uid） |
+| Tool | `query_histogram` | 健康度直方图指标 |
+| Tool | `query_wakelocks` | Userspace/Kernel wakelock 明细（支持 `kind` 过滤） |
+| Tool | `query_wakeup_reasons` | 唤醒原因（接入 `wakeupreason.FindSubsystem` 解码） |
+| Tool | `query_sync_tasks` | 同步任务频率与时长 |
+| Tool | `query_health` | 电池健康度评分（0-100，6 维度加权） |
+| Resource | `bugreport://{id}/system_stats` | 系统级全量指标 JSON |
+| Resource | `bugreport://{id}/app_stats/{uid}` | 单应用明细 JSON |
+| Resource | `bugreport://{id}/raw_checkin` | 原始 batterystats proto → JSON |
+| Resource | `bugreport://{id}/chart` | Historian plot HTML 或 V2 SVG fallback |
+| Resource | `bugreport://{id}/report` | 自包含分析报告 HTML |
+| Resource | `bugreport://{id}/health` | 健康度评分 JSON |
+| Prompt | `battery_root_cause` | 根因分析提示词模板 |
+| Prompt | `battery_ab_report` | A/B 报告提示词模板 |
+| Prompt | `battery_health_report` | 健康度改进建议提示词模板 |
+
+> 全部 7 个 `query_*` 工具支持 `report_index` 参数（默认 `0`=A 报告，`1`=B 报告），用于在 `compare_bugreports` 结果中访问第二份报告。
+
+### Form A：独立 MCP 进程（HTTP 代理）
+
+`mcp-server/` 是独立 Go module，通过 HTTP 代理运行中的 Historian 服务（`POST /historian/`）。能力是 Form B 子集（5 tools / 3 resources / 2 prompts），适合「无主仓改动的隔离部署」场景。
+
+```
+$ cd mcp-server
+$ go run . --historian-url=http://localhost:9999
+```
+
+### 安全加固（NFR-04）
+
+- **文件大小守卫**：单文件上限 100MB。
+- **base64 DoS 防护**：编码长度预检（`maxEncodedLen = maxFileSize*4/3 + 4`），解码前拒绝超大输入。
+- **路径沙箱**：`filepath.Clean` + `fi.Mode().IsRegular()` 守卫，拒绝目录 / 设备文件 / socket / 管道。
+- **prompt 注入防护**：三个 prompt handler 的用户参数用 `<user_data>` 标签包装，并前置安全声明。
+
+### 详细文档
+
+- [MCP可行性评估.md](MCP可行性评估.md)：设计阶段可行性评估 + 现状对照。
+- [MCP概要设计.md](MCP概要设计.md)：架构 / Core 契约 / 能力清单 / 非功能设计。
+- [MCP需求矩阵.md](MCP需求矩阵.md)：FR-01..FR-19 + NFR-01..NFR-06 需求清单与实施状态。
 
 ## Screenshots
 
