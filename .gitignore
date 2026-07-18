@@ -1,0 +1,37 @@
+# Go 构建产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+
+# Go 工作区文件
+vendor/
+
+# Battery Historian 运行时生成的产物目录
+# 这些目录由 setup.go 下载/生成，不应纳入版本控制
+third_party/
+compiled/
+
+# Bugreport 测试文件（可能含隐私数据）
+bugreport-*.zip
+bugreport-*.txt
+*.bugreport
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 临时解压目录
+_bugreport_extract/

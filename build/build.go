@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All Rights Reserved.
+﻿// Copyright 2015 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	pb "github.com/google/battery-historian/pb/build_proto"
+	pb "github.com/reedhoop/ai-battery-historian/pb/build_proto"
 )
 
 var fingerprintRE = regexp.MustCompile(

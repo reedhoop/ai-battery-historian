@@ -1,4 +1,4 @@
-// Copyright 2016 Google Inc. All Rights Reserved.
+﻿// Copyright 2016 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,12 +25,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/battery-historian/bugreportutils"
-	"github.com/google/battery-historian/csv"
-	"github.com/google/battery-historian/historianutils"
-	"github.com/google/battery-historian/packageutils"
-	metricspb "github.com/google/battery-historian/pb/metrics_proto"
-	usagepb "github.com/google/battery-historian/pb/usagestats_proto"
+	"github.com/reedhoop/ai-battery-historian/bugreportutils"
+	"github.com/reedhoop/ai-battery-historian/csv"
+	"github.com/reedhoop/ai-battery-historian/historianutils"
+	"github.com/reedhoop/ai-battery-historian/packageutils"
+	metricspb "github.com/reedhoop/ai-battery-historian/pb/metrics_proto"
+	usagepb "github.com/reedhoop/ai-battery-historian/pb/usagestats_proto"
 )
 
 var (

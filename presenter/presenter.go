@@ -1,4 +1,4 @@
-// Copyright 2016 Google Inc. All Rights Reserved.
+﻿// Copyright 2016 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,12 +26,12 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/google/battery-historian/aggregated"
-	"github.com/google/battery-historian/bugreportutils"
-	"github.com/google/battery-historian/historianutils"
-	"github.com/google/battery-historian/parseutils"
-	bspb "github.com/google/battery-historian/pb/batterystats_proto"
-	"github.com/google/battery-historian/wakeupreason"
+	"github.com/reedhoop/ai-battery-historian/aggregated"
+	"github.com/reedhoop/ai-battery-historian/bugreportutils"
+	"github.com/reedhoop/ai-battery-historian/historianutils"
+	"github.com/reedhoop/ai-battery-historian/parseutils"
+	bspb "github.com/reedhoop/ai-battery-historian/pb/batterystats_proto"
+	"github.com/reedhoop/ai-battery-historian/wakeupreason"
 )
 
 func abs(x float32) float32 {
@@ -48,14 +48,14 @@ func absInt32(x int32) int32 {
 	return x
 }
 
-// userActivity contains a processed form of the UserActivity proto found in github.com/google/battery-historian/pb/batterystats.proto.
+// userActivity contains a processed form of the UserActivity proto found in github.com/reedhoop/ai-battery-historian/pb/batterystats.proto.
 type userActivity struct {
 	Type  string
 	Count float32
 }
 
 // AppStat contains the parsed app data from a bugreport.
-// This contains the raw App proto in github.com/google/battery-historian/pb/batterystats.proto
+// This contains the raw App proto in github.com/reedhoop/ai-battery-historian/pb/batterystats.proto
 // but includes some custom fields that need to be processed before conversion to JS.
 type AppStat struct {
 	DevicePowerPrediction float32

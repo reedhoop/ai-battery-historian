@@ -1,4 +1,4 @@
-// Copyright 2016 Google Inc. All Rights Reserved.
+﻿// Copyright 2016 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,11 +24,11 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/google/battery-historian/checkinparse"
-	"github.com/google/battery-historian/packageutils"
+	"github.com/reedhoop/ai-battery-historian/checkinparse"
+	"github.com/reedhoop/ai-battery-historian/packageutils"
 
-	bspb "github.com/google/battery-historian/pb/batterystats_proto"
-	bldpb "github.com/google/battery-historian/pb/build_proto"
+	bspb "github.com/reedhoop/ai-battery-historian/pb/batterystats_proto"
+	bldpb "github.com/reedhoop/ai-battery-historian/pb/build_proto"
 )
 
 const (

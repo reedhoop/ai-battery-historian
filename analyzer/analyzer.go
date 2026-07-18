@@ -1,4 +1,4 @@
-// Copyright 2016 Google Inc. All Rights Reserved.
+﻿// Copyright 2016 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,24 +34,24 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"github.com/google/battery-historian/activity"
-	"github.com/google/battery-historian/broadcasts"
-	"github.com/google/battery-historian/bugreportutils"
-	"github.com/google/battery-historian/checkindelta"
-	"github.com/google/battery-historian/checkinparse"
-	"github.com/google/battery-historian/checkinutil"
-	"github.com/google/battery-historian/dmesg"
-	"github.com/google/battery-historian/historianutils"
-	"github.com/google/battery-historian/kernel"
-	"github.com/google/battery-historian/packageutils"
-	"github.com/google/battery-historian/parseutils"
-	"github.com/google/battery-historian/powermonitor"
-	"github.com/google/battery-historian/presenter"
-	"github.com/google/battery-historian/wearable"
+	"github.com/reedhoop/ai-battery-historian/activity"
+	"github.com/reedhoop/ai-battery-historian/broadcasts"
+	"github.com/reedhoop/ai-battery-historian/bugreportutils"
+	"github.com/reedhoop/ai-battery-historian/checkindelta"
+	"github.com/reedhoop/ai-battery-historian/checkinparse"
+	"github.com/reedhoop/ai-battery-historian/checkinutil"
+	"github.com/reedhoop/ai-battery-historian/dmesg"
+	"github.com/reedhoop/ai-battery-historian/historianutils"
+	"github.com/reedhoop/ai-battery-historian/kernel"
+	"github.com/reedhoop/ai-battery-historian/packageutils"
+	"github.com/reedhoop/ai-battery-historian/parseutils"
+	"github.com/reedhoop/ai-battery-historian/powermonitor"
+	"github.com/reedhoop/ai-battery-historian/presenter"
+	"github.com/reedhoop/ai-battery-historian/wearable"
 
-	bspb "github.com/google/battery-historian/pb/batterystats_proto"
-	sessionpb "github.com/google/battery-historian/pb/session_proto"
-	usagepb "github.com/google/battery-historian/pb/usagestats_proto"
+	bspb "github.com/reedhoop/ai-battery-historian/pb/batterystats_proto"
+	sessionpb "github.com/reedhoop/ai-battery-historian/pb/session_proto"
+	usagepb "github.com/reedhoop/ai-battery-historian/pb/usagestats_proto"
 )
 
 const (

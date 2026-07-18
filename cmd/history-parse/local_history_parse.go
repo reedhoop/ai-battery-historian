@@ -1,4 +1,4 @@
-// Copyright 2016 Google Inc. All Rights Reserved.
+﻿// Copyright 2016 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,9 +23,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/google/battery-historian/bugreportutils"
-	"github.com/google/battery-historian/packageutils"
-	"github.com/google/battery-historian/parseutils"
+	"github.com/reedhoop/ai-battery-historian/bugreportutils"
+	"github.com/reedhoop/ai-battery-historian/packageutils"
+	"github.com/reedhoop/ai-battery-historian/parseutils"
 )
 
 var (

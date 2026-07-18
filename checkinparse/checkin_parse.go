@@ -27,15 +27,15 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"github.com/google/battery-historian/build"
-	"github.com/google/battery-historian/checkinutil"
-	"github.com/google/battery-historian/historianutils"
-	"github.com/google/battery-historian/packageutils"
-	"github.com/google/battery-historian/sliceparse"
+	"github.com/reedhoop/ai-battery-historian/build"
+	"github.com/reedhoop/ai-battery-historian/checkinutil"
+	"github.com/reedhoop/ai-battery-historian/historianutils"
+	"github.com/reedhoop/ai-battery-historian/packageutils"
+	"github.com/reedhoop/ai-battery-historian/sliceparse"
 
-	bspb "github.com/google/battery-historian/pb/batterystats_proto"
-	sessionpb "github.com/google/battery-historian/pb/session_proto"
-	usagepb "github.com/google/battery-historian/pb/usagestats_proto"
+	bspb "github.com/reedhoop/ai-battery-historian/pb/batterystats_proto"
+	sessionpb "github.com/reedhoop/ai-battery-historian/pb/session_proto"
+	usagepb "github.com/reedhoop/ai-battery-historian/pb/usagestats_proto"
 )
 
 const (
@@ -1979,7 +1979,9 @@ func parseAppWifi(record []string, app *bspb.BatteryStats_App) (string, []error)
 //
 // format: <idle_time>, <rx_time>, <power_ma_ms>, tx_time...
 func parseControllerData(pc checkinutil.Counter, section string, record []string) (*bspb.BatteryStats_ControllerActivity, error) {
-	var idle, rx, pwr int64
+	// 新版 Android (checkin version >= 22) 的 gmcd/gwcd/gbcd 数据中
+	// power_ma_ms 字段可能为浮点数（如 "0.0"），因此用 float64 解析再转 int64。
+	var idle, rx, pwr float64
 	rem, err := parseSlice(pc, section, record, &idle, &rx, &pwr)
 	if err != nil {
 		return nil, err
@@ -1988,14 +1990,19 @@ func parseControllerData(pc checkinutil.Counter, section string, record []string
 		return nil, fmt.Errorf(`%s didn't contain any transmit level data: "%v"`, section, record)
 	}
 	c := &bspb.BatteryStats_ControllerActivity{
-		IdleTimeMsec: proto.Int64(idle),
-		RxTimeMsec:   proto.Int64(rx),
-		PowerMah:     proto.Int64(pwr),
+		IdleTimeMsec: proto.Int64(int64(idle)),
+		RxTimeMsec:   proto.Int64(int64(rx)),
+		PowerMah:     proto.Int64(int64(pwr)),
 	}
 	for i, t := range rem {
+		// 兼容浮点数（如 "0.0"），先试 int，失败再试 float
 		tm, err := strconv.Atoi(t)
 		if err != nil {
-			return nil, fmt.Errorf("%s contained invalid transmit value: %v", section, err)
+			f, ferr := strconv.ParseFloat(t, 64)
+			if ferr != nil {
+				return nil, fmt.Errorf("%s contained invalid transmit value %q: %v", section, t, ferr)
+			}
+			tm = int(f)
 		}
 		c.Tx = append(c.Tx, &bspb.BatteryStats_ControllerActivity_TxLevel{
 			Level:    proto.Int32(int32(i)),
