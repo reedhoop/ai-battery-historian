@@ -29,7 +29,10 @@ import (
 
 var (
 	// ServiceDumpRE is a regular expression to match the beginning of a service dump.
-	ServiceDumpRE = regexp.MustCompile(`^DUMP\s+OF\s+SERVICE\s+(?P<service>\S+):`)
+	// The optional priority token (CRITICAL / HIGH / NORMAL) introduced in newer
+	// bugreports is NOT captured — only the service name goes into the `service`
+	// group, so all existing call sites keep working.
+	ServiceDumpRE = regexp.MustCompile(`^DUMP\s+OF\s+SERVICE\s+(?:CRITICAL|HIGH|NORMAL\s+)?(?P<service>\S+):`)
 
 	// piiEmailRE is a regular expression to match any PII string of the form abc@xxx.yyy.
 	piiEmailRE = regexp.MustCompile(`(?P<prefix>\S+/)?` + `(?P<account>\S+)` + `@` + `(?P<suffix>\S+\.\S+)`)

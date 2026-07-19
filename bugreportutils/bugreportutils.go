@@ -1,4 +1,4 @@
-﻿// Copyright 2016 Google Inc. All Rights Reserved.
+// Copyright 2016 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,12 @@ const (
 var (
 	// BugReportSectionRE is a regular expression to match the beginning of a bug report section.
 	BugReportSectionRE = regexp.MustCompile(`------\s+(?P<section>.*)\s+-----`)
+
+	// ActivitySubsectionRE matches the subsection headers inside the activity
+	// dumpsys section. The subsection name (e.g. "lastanr", "lmk", "processes")
+	// goes into the `subsection` group. Example:
+	//   "ACTIVITY MANAGER LAST ANR (dumpsys activity lastanr)"
+	ActivitySubsectionRE = regexp.MustCompile(`^ACTIVITY MANAGER\s+[A-Z ]+\s+\(dumpsys activity (?P<subsection>\S+)\)`)
 
 	// deviceIDRE is a regular expression that matches the "DeviceID" line
 	deviceIDRE = regexp.MustCompile("DeviceID: (?P<deviceID>[0-9]+)")
@@ -266,6 +272,30 @@ Loop:
 	}
 
 	return strings.Join(bsCheckin, "\n")
+}
+
+// ExtractServiceDump 抽取指定 dumpsys 服务的完整段原文。service 参数
+// 不含 "DUMP OF SERVICE" 前缀（如 "power" / "alarm" / "activity"）。
+// 支持带优先级前缀（CRITICAL / HIGH / NORMAL）的段标记（由
+// historianutils.ServiceDumpRE 统一匹配）。
+// 返回段正文（不含段标记行），未找到返回 ""。
+//
+// 当 bugreport 中存在多个同名段（如 activity 段在 CRITICAL 和无前缀
+// 各出现一次）时，返回第一个匹配段的正文。调用方如需合并多段，可自行
+// 多次调用并拼接。
+func ExtractServiceDump(input, service string) string {
+	inSection := false
+	var lines []string
+	for _, line := range strings.Split(input, "\n") {
+		if m, result := historianutils.SubexpNames(historianutils.ServiceDumpRE, line); m {
+			inSection = (result["service"] == service)
+			continue
+		}
+		if inSection {
+			lines = append(lines, line)
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // ExtractBugReport extracts and returns only the first valid bug report data
