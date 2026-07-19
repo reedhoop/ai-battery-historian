@@ -53,9 +53,6 @@ func TestAnalyzeV2Sample(t *testing.T) {
 	if !strings.Contains(r.ReportHTML, "<svg") {
 		t.Errorf("ReportHTML does not embed the battery-level chart")
 	}
-	if r.Health == nil {
-		t.Errorf("Health score was not computed for the V2 sample")
-	}
 }
 
 // TestParseV2History confirms the Format:2 timeline is actually extracted

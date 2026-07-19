@@ -29,8 +29,6 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
-	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -44,7 +42,6 @@ import (
 	"github.com/reedhoop/ai-battery-historian/checkinparse"
 	"github.com/reedhoop/ai-battery-historian/checkinutil"
 	"github.com/reedhoop/ai-battery-historian/dmesg"
-	"github.com/reedhoop/ai-battery-historian/analyzer/health"
 	"github.com/reedhoop/ai-battery-historian/historianutils"
 	"github.com/reedhoop/ai-battery-historian/kernel"
 	"github.com/reedhoop/ai-battery-historian/packageutils"
@@ -132,9 +129,6 @@ type uploadResponse struct {
 	BatteryStats        *bspb.BatteryStats       `json:"batteryStats"`
 	DeviceCapacity      float32                  `json:"deviceCapacity"`
 	HistogramStats      presenter.HistogramStats `json:"histogramStats"`
-	// LevelSummaries 是逐段（电量下降区间）带时间戳的原始序列，
-	// 供健康度窗口化重算使用。无 json tag → 不会序列化给前端（避免巨大负载）。
-	LevelSummaries []parseutils.ActivitySummary `json:"-"`
 	TimeToDelta         map[string]string        `json:"timeToDelta"`
 	CriticalError       string                   `json:"criticalError"` // Critical errors are ones that cause parsing of important data to abort early and should be shown prominently to the user.
 	Note                string                   `json:"note"`          // A message to show to the user that they should be aware of.
@@ -159,13 +153,6 @@ type summariesData struct {
 	timeToDelta     map[string]string
 	errs            []error
 	overflowMs      int64
-	// levelSummaries is the fine-grained per-battery-level-drop series used
-	// for windowed health re-scoring (P3-C time-range). It is kept separate
-	// from `summaries` (the coarser discharge-interval series fed to the
-	// result page) so changing the windowing source never affects the
-	// rendered page. Empty when the report's batterystats format yields no
-	// parseable segment history (e.g. some modern bugreports).
-	levelSummaries []parseutils.ActivitySummary
 }
 
 type checkinData struct {
@@ -399,7 +386,6 @@ func InitTemplates(dir string) {
 	resultTempl = constructTemplate(dir, []string{
 		"body.html",
 		"summaries.html",
-		"health_card.html",
 		"historian_v2.html",
 		"checkin.html",
 		"history.html",
@@ -587,122 +573,7 @@ func AnalyzeAndResponse(w http.ResponseWriter, r *http.Request, files map[string
 		http.Error(w, fmt.Sprintf("failed to analyze file: %v", err), http.StatusInternalServerError)
 		return
 	}
-	// P3-C time-range: retain the last analysis so the health card can
-	// re-score over an arbitrary window via GET /api/health without a
-	// re-upload (the web server is otherwise stateless).
-	captureHealthContext(pd)
 	pd.SendAsJSON(w, r)
-}
-
-// ---------------------------------------------------------------------------
-// P3-C time-range health: in-memory retention of the last analyzed report.
-//
-// The Historian web server is stateless — it POSTs, returns HTML, then forgets
-// the parse. To let the health card re-score over an arbitrary time window via
-// /api/health WITHOUT re-uploading the bugreport, we keep only the last
-// analysis's per-segment series + battery capacity + full health report. This
-// is a single-slot, process-local cache: the next successful upload replaces
-// it. It is guarded by healthMu for concurrent GET requests.
-// ---------------------------------------------------------------------------
-
-var (
-	healthMu           sync.Mutex
-	lastLevelSummaries []parseutils.ActivitySummary
-	lastCapacityMah    float32
-	lastFullHealth     *health.Report
-)
-
-// captureHealthContext retains the time-indexed series + capacity + full
-// health report of the just-analyzed report so windowed re-scoring can run.
-// Called from AnalyzeAndResponse after a successful parse.
-func captureHealthContext(pd *ParsedData) {
-	if len(pd.responseArr) == 0 {
-		return
-	}
-	resp := pd.responseArr[0]
-	var full *health.Report
-	if resp.CriticalError == "" && len(pd.data) > 0 {
-		// Reuse the same pure scoring function the MCP / card path uses.
-		full = health.Evaluate(pd.data[0].CheckinSummary, resp.HistogramStats)
-	}
-	healthMu.Lock()
-	defer healthMu.Unlock()
-	lastLevelSummaries = resp.LevelSummaries
-	lastCapacityMah = resp.DeviceCapacity
-	lastFullHealth = full
-}
-
-// WindowedHealth re-scores the most recently analyzed report over the
-// user-selected time span [fromMs, toMs] (unix ms). It returns nil when no
-// report has been analyzed in this process (or the last one failed to parse).
-func WindowedHealth(fromMs, toMs int64) *health.Report {
-	healthMu.Lock()
-	defer healthMu.Unlock()
-	if len(lastLevelSummaries) == 0 && lastFullHealth == nil {
-		return nil
-	}
-	return health.EvaluateWindow(lastLevelSummaries, lastCapacityMah, fromMs, toMs, lastFullHealth)
-}
-
-// WindowedHealthHandler serves GET /api/health?from=<ms>&to=<ms>, returning
-// the windowed health Report JSON for the last analyzed bugreport.
-func WindowedHealthHandler(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	fromStr, toStr := q.Get("from"), q.Get("to")
-	if fromStr == "" || toStr == "" {
-		http.Error(w, "missing from/to query params (unix ms)", http.StatusBadRequest)
-		return
-	}
-	fromMs, err1 := strconv.ParseInt(fromStr, 10, 64)
-	toMs, err2 := strconv.ParseInt(toStr, 10, 64)
-	if err1 != nil || err2 != nil {
-		http.Error(w, "invalid from/to query params (must be integer unix ms)", http.StatusBadRequest)
-		return
-	}
-	rep := WindowedHealth(fromMs, toMs)
-	w.Header().Set("Content-Type", "application/json")
-	if rep == nil {
-		json.NewEncoder(w).Encode(map[string]interface{}{"error": "no report analyzed yet"})
-		return
-	}
-	json.NewEncoder(w).Encode(rep)
-}
-
-// BatteryLevelHandler serves GET /api/batterylevel, returning the battery
-// level time series (unix ms + level 0-100) derived from the last analyzed
-// report's per-segment summaries. It powers the health-card draggable brush
-// chart so the user can pick an arbitrary time window to re-score health.
-func BatteryLevelHandler(w http.ResponseWriter, r *http.Request) {
-	healthMu.Lock()
-	summaries := lastLevelSummaries
-	healthMu.Unlock()
-	w.Header().Set("Content-Type", "application/json")
-	if len(summaries) == 0 {
-		json.NewEncoder(w).Encode(map[string]interface{}{"points": []interface{}{}})
-		return
-	}
-	type pt struct {
-		T     int64 `json:"t"`
-		Level int   `json:"level"`
-	}
-	// Build a piecewise battery-level curve: each discharge segment contributes
-	// its start (InitialLevel) and end (FinalLevel) points.
-	raw := make([]pt, 0, len(summaries)*2)
-	for _, s := range summaries {
-		raw = append(raw, pt{s.StartTimeMs, int(s.InitialBatteryLevel)}, pt{s.EndTimeMs, int(s.FinalBatteryLevel)})
-	}
-	// Collapse to one level per timestamp; later segments win (contiguous
-	// segments share a boundary, so this just keeps the curve continuous).
-	latest := make(map[int64]int)
-	for _, p := range raw {
-		latest[p.T] = p.Level
-	}
-	pts := make([]pt, 0, len(latest))
-	for t, l := range latest {
-		pts = append(pts, pt{t, l})
-	}
-	sort.Slice(pts, func(i, j int) bool { return pts[i].T < pts[j].T })
-	json.NewEncoder(w).Encode(map[string]interface{}{"points": pts})
 }
 
 // AnalyzeFiles processes and analyzes the list of uploaded files.
@@ -791,40 +662,6 @@ func extractHistogramStats(data presenter.HTMLData) presenter.HistogramStats {
 		BluetoothState:                      data.CheckinSummary.BluetoothState,
 		DataConnection:                      data.CheckinSummary.DataConnection,
 	}
-}
-
-// toHealthReport copies an analyzer/health.Report into the presentational
-// presenter.HealthReport. It lives in the analyzer package (which imports
-// both) so presenter can stay free of the health import and avoid a cycle.
-func toHealthReport(hr *health.Report) *presenter.HealthReport {
-	if hr == nil {
-		return nil
-	}
-	out := &presenter.HealthReport{
-		Score:       hr.Score,
-		Grade:       hr.Grade,
-		Summary:     hr.Summary,
-		Evaluated:   hr.Evaluated,
-		Total:       hr.Total,
-		GeneratedAt: hr.GeneratedAt.Format(time.RFC3339),
-	}
-	for _, d := range hr.Dimensions {
-		out.Dimensions = append(out.Dimensions, presenter.HealthDimension{
-			Label:  d.Label,
-			Score:  d.Score,
-			Status: d.Status,
-			Detail: d.Detail,
-		})
-	}
-	for _, a := range hr.Alerts {
-		out.Alerts = append(out.Alerts, presenter.HealthAlert{
-			Level:   a.Level,
-			Category: a.Category,
-			Message: a.Message,
-			Value:    a.Value,
-		})
-	}
-	return out
 }
 
 // writeTempFile writes the contents to a temporary file.
@@ -1141,8 +978,6 @@ func (pd *ParsedData) parseBugReport(fnameA, contentsA, fnameB, contentsB string
 			AppStats:        data.AppStats,
 			BatteryStats:    bsStats,
 			DeviceCapacity:  bsStats.GetSystem().GetPowerUseSummary().GetBatteryCapacityMah(),
-			// 留存逐段序列给健康度窗口化重算（不发给前端）。
-			LevelSummaries: summariesOutput.levelSummaries,
 			HistogramStats:  extractHistogramStats(data),
 			TimeToDelta:     summariesOutput.timeToDelta,
 			CriticalError:   ce,
@@ -1152,14 +987,6 @@ func (pd *ParsedData) parseBugReport(fnameA, contentsA, fnameB, contentsB string
 			OverflowMs:      summariesOutput.overflowMs,
 			IsDiff:          diff,
 		})
-		// P3-C / WebUI ③: 把电池健康度评分接入结果页卡片。
-		// 复用 health.Evaluate（与 analysisResults 中给 MCP 用的是同一纯函数），
-		// 避免循环依赖：health 已 import presenter，故此处只拷贝成 presenter.HealthReport。
-		if ce == "" {
-			if hr := health.Evaluate(data.CheckinSummary, extractHistogramStats(data)); hr != nil {
-				data.Health = toHealthReport(hr)
-			}
-		}
 		pd.data = append(pd.data, data)
 
 		if diff {
@@ -1212,10 +1039,9 @@ func analyze(bugReport string, pkgs []*usagepb.PackageInfo) summariesData {
 	var bufTotal, bufLevel bytes.Buffer
 	// repTotal contains summaries over discharge intervals
 	repTotal := parseutils.AnalyzeHistory(&bufTotal, bugReport, parseutils.FormatTotalTime, upm, false)
-	// repLevel contains summaries for each battery level drop (finer
-	// granularity). The generated errors would be the exact same as
-	// repTotal.Errs so no need to track or add them again.
-	repLevel := parseutils.AnalyzeHistory(&bufLevel, bugReport, parseutils.FormatBatteryLevel, upm, false)
+	// repLevel contains summaries for each battery level drop.
+	// The generated errors would be the exact same as repTotal.Errs so no need to track or add them again.
+	parseutils.AnalyzeHistory(&bufLevel, bugReport, parseutils.FormatBatteryLevel, upm, false)
 
 	// Exclude summaries with no change in battery level
 	var summariesTotal []parseutils.ActivitySummary
@@ -1225,16 +1051,8 @@ func analyze(bugReport string, pkgs []*usagepb.PackageInfo) summariesData {
 		}
 	}
 
-	// Windowing source: prefer the fine-grained per-level-drop series; fall
-	// back to the discharge-interval series when level-drop parsing yields
-	// nothing (some reports only expose the coarser intervals).
-	levelSummaries := repLevel.Summaries
-	if len(levelSummaries) == 0 {
-		levelSummaries = summariesTotal
-	}
-
 	errs = append(errs, repTotal.Errs...)
-	return summariesData{summariesTotal, bufTotal.String(), bufLevel.String(), repTotal.TimeToDelta, errs, repTotal.OverflowMs, levelSummaries}
+	return summariesData{summariesTotal, bufTotal.String(), bufLevel.String(), repTotal.TimeToDelta, errs, repTotal.OverflowMs}
 }
 
 // generateHistorianPlot calls the Historian python script to generate html charts.

@@ -56,14 +56,7 @@ func (s *analysisServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		switch r.URL.Path {
-		case "/api/health":
-			analyzer.WindowedHealthHandler(w, r)
-		case "/api/batterylevel":
-			analyzer.BatteryLevelHandler(w, r)
-		default:
-			analyzer.UploadHandler(w, r)
-		}
+		analyzer.UploadHandler(w, r)
 	case "POST":
 		r.ParseForm()
 		analyzer.HTTPAnalyzeHandler(w, r)

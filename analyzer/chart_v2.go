@@ -17,7 +17,6 @@ package analyzer
 import (
 	"fmt"
 	"html"
-	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -296,8 +295,8 @@ func fmtDuration(ms int64) string {
 }
 
 // generateReportHTML builds a self-contained HTML report page for one analysis
-// result: device metadata, the health card, the battery-level chart, and key
-// aggregate stats. No external assets are referenced.
+// result: device metadata, the battery-level chart, and key aggregate stats.
+// No external assets are referenced.
 //
 // plotHTML is the already-resolved chart HTML (either the Python Historian
 // plot from AnalyzeWithChart, or the inline-SVG fallback from
@@ -312,14 +311,6 @@ body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin
 h1{font-size:20px;margin:0 0 4px}
 .meta{color:#666;font-size:13px;margin-bottom:20px}
 .card{background:#fff;border:1px solid #e3e6ea;border-radius:10px;padding:18px;margin-bottom:20px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
-.hscore{display:flex;align-items:center;gap:18px}
-.hnum{font-size:44px;font-weight:700;line-height:1}
-.grade{font-size:18px;font-weight:600}
-.summary{margin-top:10px;color:#444;font-size:14px}
-.alert{padding:8px 10px;border-radius:6px;margin-top:8px;font-size:13px;border-left:4px solid #ccc}
-.critical{background:#fdecea;border-color:#e53935}
-.warning{background:#fff8e1;border-color:#fbc02d}
-.info{background:#e3f2fd;border-color:#1e88e5}
 table{border-collapse:collapse;width:100%;font-size:13px}
 td,th{text-align:left;padding:6px 10px;border-bottom:1px solid #eee}
 th{color:#666;font-weight:600}
@@ -341,52 +332,6 @@ th{color:#666;font-weight:600}
 	}
 	b.WriteString(strings.Join(meta, " &middot; "))
 	b.WriteString(`</div>`)
-
-	// Health card.
-	if r.Health != nil {
-		h := r.Health
-		b.WriteString(`<div class="card"><div class="hscore"><div class="hnum">`)
-		b.WriteString(strconv.FormatFloat(math.Round(h.Score), 'f', 0, 64))
-		b.WriteString(`</div><div><div class="grade">Grade `)
-		b.WriteString(html.EscapeString(h.Grade))
-		b.WriteString(`</div><div class="k" style="font-size:12px">Battery health score (0-100)</div></div></div>`)
-		if h.Summary != "" {
-			b.WriteString(`<div class="summary">`)
-			b.WriteString(html.EscapeString(h.Summary))
-			b.WriteString(`</div>`)
-		}
-		for _, a := range h.Alerts {
-			b.WriteString(`<div class="alert `)
-			b.WriteString(html.EscapeString(a.Level))
-			b.WriteString(`"><b>`)
-			b.WriteString(html.EscapeString(strings.ToUpper(a.Level)))
-			b.WriteString(`</b> &middot; `)
-			b.WriteString(html.EscapeString(a.Category))
-			b.WriteString(`: `)
-			b.WriteString(html.EscapeString(a.Message))
-			if a.Value != "" {
-				b.WriteString(` (`)
-				b.WriteString(html.EscapeString(a.Value))
-				b.WriteString(`)`)
-			}
-			b.WriteString(`</div>`)
-		}
-		// Dimension breakdown.
-		b.WriteString(`<table style="margin-top:12px"><tr><th>Dimension</th><th>Score</th><th>Status</th></tr>`)
-		for _, d := range h.Dimensions {
-			if !d.Valid {
-				continue
-			}
-			b.WriteString(`<tr><td>`)
-			b.WriteString(html.EscapeString(d.Label))
-			b.WriteString(`</td><td>`)
-			b.WriteString(strconv.FormatFloat(math.Round(d.Score), 'f', 0, 64))
-			b.WriteString(`</td><td>`)
-			b.WriteString(html.EscapeString(d.Status))
-			b.WriteString(`</td></tr>`)
-		}
-		b.WriteString(`</table></div>`)
-	}
 
 	// Chart: embed the already-resolved PlotHTML so /report and /chart agree.
 	if plotHTML != "" {

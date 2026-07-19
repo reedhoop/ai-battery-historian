@@ -119,13 +119,6 @@ historian.panels_ = {
     show: true,
     resizable: true,
     height: 800
-  },
-  health: {
-    selector: '#panel-health',
-    menuSelector: '#menu-health',
-    toggleSelector: '#toggle-health',
-    show: true,
-    toggable: true
   }
 };
 

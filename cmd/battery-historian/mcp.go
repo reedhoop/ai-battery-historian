@@ -233,13 +233,6 @@ func registerMCPTools(s *server.MCPServer) {
 		mcp.WithString("report_index", mcp.Description("For compare_bugreports results: 0 for the first (A) or 1 for the second (B) report. Default: 0.")),
 	), syncTasksHandler)
 
-	// P3-C query_health
-	s.AddTool(mcp.NewTool("query_health",
-		mcp.WithDescription("Return the battery health score (0-100), letter grade, per-dimension breakdown and graded alerts for a previously analyzed report."),
-		mcp.WithString("id", mcp.Required(), mcp.Description("Result id from analyze_bugreport.")),
-		mcp.WithString("report_index", mcp.Description("For compare_bugreports results: 0 for the first (A) or 1 for the second (B) report. Default: 0.")),
-	), healthHandler)
-
 	// P4 (OEM 功耗分析扩展): 4 个 dumpsys 段查询工具，构成唤醒源归因闭环。
 	// 每个工具返回对应 dumpsys 段的结构化镜像；段不存在时返回错误。
 	// 所有工具复用 resultForID / reportIndexFromReq，支持 A/B 对比报告。
@@ -812,24 +805,6 @@ func histogramHandler(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallTo
 	})
 }
 
-// P3-C: battery health score tool.
-func healthHandler(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	r, err := resultForID(req)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if r.Health == nil {
-		return mcp.NewToolResultError("health not available (report may be unsupported or failed to parse)"), nil
-	}
-	return toolResultJSON(map[string]any{
-		"score":      r.Health.Score,
-		"grade":      r.Health.Grade,
-		"summary":    r.Health.Summary,
-		"dimensions": r.Health.Dimensions,
-		"alerts":     r.Health.Alerts,
-	})
-}
-
 // ---------------------------------------------------------------------------
 // P4 (OEM 功耗分析扩展) tool handlers
 // ---------------------------------------------------------------------------
@@ -1117,14 +1092,7 @@ func buildSummary(id string, item *storedItem) map[string]any {
 		})
 	}
 	out["topApps"] = topApps
-	if r.Health != nil {
-		out["health"] = map[string]any{
-			"score":   r.Health.Score,
-			"grade":   r.Health.Grade,
-			"summary": r.Health.Summary,
-		}
-	}
-	out["hint"] = "Use query_system_stats / query_app_stats / query_histogram / query_health with this id, or resources bugreport://<id>/..."
+	out["hint"] = "Use query_system_stats / query_app_stats / query_histogram with this id, or resources bugreport://<id>/..."
 	if item.Compare != nil {
 		out["usingComparison"] = item.Compare.UsingComparison
 	}
@@ -1157,14 +1125,6 @@ func registerMCPResources(s *server.MCPServer) {
 		mcp.WithTemplateMIMEType("text/plain"),
 	), rawCheckinResourceHandler)
 
-	// P3-C: battery health score as a Resource.
-	s.AddResourceTemplate(mcp.NewResourceTemplate(
-		"bugreport://{id}/health",
-		"Battery health score and alerts for an analyzed bugreport",
-		mcp.WithTemplateDescription("0-100 health score, letter grade, per-dimension scores and graded alerts."),
-		mcp.WithTemplateMIMEType("application/json"),
-	), healthResourceHandler)
-
 	// P3-B: Historian plot HTML as a Resource (only populated when the report
 	// was analyzed with chart generation enabled, i.e. --mcp_with_chart).
 	s.AddResourceTemplate(mcp.NewResourceTemplate(
@@ -1175,14 +1135,13 @@ func registerMCPResources(s *server.MCPServer) {
 	), chartResourceHandler)
 
 	// P3-B: full analysis-page HTML as a Resource. Unlike /chart (which only
-	// carries the timeline), /report bundles device metadata, the health card,
-	// the battery-level chart and the key aggregate stats in one self-contained
-	// page. Populated for every successful parse, so it does not require
-	// --mcp_with_chart.
+	// carries the timeline), /report bundles device metadata, the battery-level
+	// chart and the key aggregate stats in one self-contained page. Populated
+	// for every successful parse, so it does not require --mcp_with_chart.
 	s.AddResourceTemplate(mcp.NewResourceTemplate(
 		"bugreport://{id}/report",
 		"Full Battery Historian analysis page for an analyzed bugreport",
-		mcp.WithTemplateDescription("A self-contained HTML report: device metadata, health card, battery-level chart and key aggregate stats."),
+		mcp.WithTemplateDescription("A self-contained HTML report: device metadata, battery-level chart and key aggregate stats."),
 		mcp.WithTemplateMIMEType("text/html"),
 	), reportResourceHandler)
 
@@ -1364,18 +1323,6 @@ func rawCheckinResourceHandler(ctx context.Context, req mcp.ReadResourceRequest)
 	}, nil
 }
 
-// P3-C: battery health score as a Resource.
-func healthResourceHandler(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-	r, err := primaryResult(req)
-	if err != nil {
-		return nil, err
-	}
-	if r.Health == nil {
-		return nil, fmt.Errorf("health not available (report may be unsupported or failed to parse)")
-	}
-	return jsonResource(req.Params.URI, r.Health)
-}
-
 // ---------------------------------------------------------------------------
 // P4 (OEM 功耗分析扩展) resource handlers
 // ---------------------------------------------------------------------------
@@ -1494,14 +1441,6 @@ func registerMCPPrompts(s *server.MCPServer) {
 			mcp.ArgumentDescription("CombinedCheckin diff JSON from compare_bugreports."),
 		),
 	), abReportPrompt)
-
-	// P3-C: battery health report prompt.
-	s.AddPrompt(mcp.NewPrompt("battery_health_report",
-		mcp.WithPromptDescription("Given a battery health score + alerts, produce a prioritized remediation plan."),
-		mcp.WithArgument("health",
-			mcp.ArgumentDescription("Health report JSON from query_health / bugreport://<id>/health."),
-		),
-	), healthPrompt)
 }
 
 func rootCausePrompt(ctx context.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
@@ -1546,26 +1485,6 @@ A/B diff (JSON):
 For each degraded metric (positive delta), explain the likely cause and which component/app is responsible. Highlight the top 3 regressions and top 3 improvements. Conclude with a go/no-go style recommendation.`
 
 	return mcp.NewGetPromptResult("Battery A/B report", []mcp.PromptMessage{
-		mcp.NewPromptMessage(mcp.RoleAssistant, mcp.NewTextContent(text)),
-	}), nil
-}
-
-// P3-C: battery health report prompt.
-func healthPrompt(ctx context.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-	health := ""
-	if req.Params.Arguments != nil {
-		health = req.Params.Arguments["health"]
-	}
-	text := `You are an Android battery health advisor.` + promptInjectionGuard + `
-
-Given the battery health report below, produce a prioritized, actionable remediation plan.
-
-Health report (JSON):
-` + wrapUserData(health) + `
-
-For each critical/warning alert, give: (1) the likely root cause, (2) the suspect component or app, (3) the concrete fix. Then state the overall health grade and the single highest-impact action the user should take first.`
-
-	return mcp.NewGetPromptResult("Battery health report", []mcp.PromptMessage{
 		mcp.NewPromptMessage(mcp.RoleAssistant, mcp.NewTextContent(text)),
 	}), nil
 }
