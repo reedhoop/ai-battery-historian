@@ -1,0 +1,38 @@
+DUMP OF SERVICE procstats:
+Service host process PID: 1952
+Threads in use: 0/32
+Client PIDs: 494
+COMMITTED STATS FROM 2026-07-13-15-35-12:
+  * com.android.systemui / u0a106 / v20251243:
+         TOTAL: 99% (0,00-0,00-0,00/0,00-0,00-0,00/474MB-446MB-474MB over 2)
+    Persistent: 35% (0,00-0,00-0,00/0,00-0,00-0,00/474MB-446MB-474MB over 2)
+       Bnd Fgs: 64%
+  * com.tcl.guard / 1000 / v22033:
+         TOTAL: 99% (0,00-0,00-0,00/0,00-0,00-0,00/110MB-108MB-110MB over 5)
+    Persistent: 99% (0,00-0,00-0,00/0,00-0,00-0,00/110MB-108MB-110MB over 5)
+  * com.tcl.ttvs / 1000 / v105628:
+         TOTAL: 99% (0,00-0,00-0,00/0,00-0,00-0,00/131MB-129MB-131MB over 5)
+       Bnd Top: 81% (0,00-0,00-0,00/0,00-0,00-0,00/131MB-129MB-131MB over 5)
+       Bnd Fgs: 18%
+  * com.tcl.android.launcher / u0a89 / v2037262804:
+         TOTAL: 99% (0,00-0,00-0,00/0,00-0,00-0,00/654MB-486MB-654MB over 5)
+           Top: 69% (0,00-0,00-0,00/0,00-0,00-0,00/654MB-486MB-654MB over 5)
+       Bnd Top: 12%
+       Bnd Fgs: 16%
+        Imp Fg: 2,2%
+  * com.google.android.inputmethod.latin / u0a194 / v175587354:
+         TOTAL: 82% (0,00-0,00-0,00/0,00-0,00-0,00/196MB-264MB-321MB over 5)
+       Bnd Fgs: 1,2%
+        Imp Bg: 80% (0,00-0,00-0,00/0,00-0,00-0,00/196MB-264MB-321MB over 5)
+  * system / 1000 / v36:
+         TOTAL: 99% (0,00-0,00-0,00/0,00-0,00-0,00/727MB-763MB-832MB over 5)
+    Service Rs: 99% (0,00-0,00-0,00/0,00-0,00-0,00/727MB-763MB-832MB over 5)
+  * com.google.android.gms.persistent / u0a180 / v262532035:
+         TOTAL: 99% (0,00-0,00-0,00/0,00-0,00-0,00/287MB-296MB-319MB over 5)
+       Bnd Top: 79% (0,00-0,00-0,00/0,00-0,00-0,00/287MB-296MB-319MB over 5)
+       Bnd Fgs: 2,9%
+       Service: 18%
+
+Summary:
+  Total runtime: 4h38m12s216ms
+  Total PSS collection: 651x over +7s531ms

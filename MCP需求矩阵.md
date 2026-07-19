@@ -41,6 +41,14 @@
 | FR-17 | 以 Resource 暴露图表 HTML（P3-B） | 功能 | Resource `bugreport://{id}/chart` | `AnalysisResult.PlotHTML`（`generateV2ChartSVG` `chart_v2.go:119` fallback，或 `AnalyzeWithChart` 走 Python） | P2 | P3-B | 0.5d | ✅ B only |
 | FR-18 | 以 Resource 暴露分析报告页（P3-B） | 功能 | Resource `bugreport://{id}/report` | `AnalysisResult.ReportHTML`（`generateReportHTML` `chart_v2.go:301`） | P2 | P3-B | 0.5d | ✅ B only |
 | FR-19 | 健康度评分查询（P3-C） | 功能 | Tool `query_health(id)` + Resource `bugreport://{id}/health` + Prompt `battery_health_report` | `AnalysisResult.Health`（`health.Evaluate` `analyzer/health/health.go:81`，6 维度加权） | P2 | P3-C | 1d | ✅ B only |
+| FR-20 | 查询 dumpsys power 段（实时 wakelock 快照） | 功能 | Tool `query_power(id, report_index?)` | `AnalysisResult.PowerSummary`（`power.Parse` `analyzer/power/power.go`，`bugreportutils.ExtractServiceDump(raw,"power")`） | P1 | P4 | 0.5d | ✅ B only |
+| FR-21 | 查询 dumpsys alarm 段（定时唤醒源） | 功能 | Tool `query_alarms(id, report_index?, topN?)` | `AnalysisResult.AlarmSummary`（`alarm.Parse` `analyzer/alarm/alarm.go`，Top-N 按 repeatInterval 降序） | P1 | P4 | 0.5d | ✅ B only |
+| FR-22 | 查询 dumpsys activity 段（ANR/LMK/exits/running） | 功能 | Tool `query_activity(id, report_index?, kind?:anr\|lmk\|exits\|running\|all)` | `AnalysisResult.ActivityStats`（`dumpsysactivity.Parse` `analyzer/dumpsysactivity/activity.go`，`ActivitySubsectionRE` 切子段） | P1 | P4 | 0.75d | ✅ B only |
+| FR-23 | 查询 dumpsys procstats 段（进程状态 + RSS） | 功能 | Tool `query_procstats(id, report_index?, topN?)` | `AnalysisResult.ProcStats`（`procstats.Parse` `analyzer/procstats/procstats.go`，按 Total.Percent 降序） | P1 | P4 | 0.5d | ✅ B only |
+| FR-24 | 以 Resource 暴露 dumpsys power 段 | 功能 | Resource `bugreport://{id}/power` | `*power.Summary` → JSON（完整无裁剪） | P2 | P4 | 0.25d | ✅ B only |
+| FR-25 | 以 Resource 暴露 dumpsys alarm 段 | 功能 | Resource `bugreport://{id}/alarms` | `*alarm.Summary` → JSON（完整无裁剪） | P2 | P4 | 0.25d | ✅ B only |
+| FR-26 | 以 Resource 暴露 dumpsys activity 段 | 功能 | Resource `bugreport://{id}/activity` | `*dumpsysactivity.Summary` → JSON（完整无裁剪） | P2 | P4 | 0.25d | ✅ B only |
+| FR-27 | 以 Resource 暴露 dumpsys procstats 段 | 功能 | Resource `bugreport://{id}/procstats` | `*procstats.Summary` → JSON（完整无裁剪） | P2 | P4 | 0.25d | ✅ B only |
 | NFR-01 | 构建模块化（引入 go.mod） | 工程 | — | module `github.com/reedhoop/ai-battery-historian`，go 1.25.5（全仓 import 已替换，含 P3-B/C 新增 6 文件） | P0 | P1/P2 | 0.5d | ✅ 主体完成 |
 | NFR-02 | MCP 路径不依赖 Python 2.7 | 工程 | — | Form B `ParsedData.skipPlot=true` (`core.go:85`) 跳过 `generateHistorianPlot`；Form A 仍触发 `doHistorian`（`analyzer.go:1043`），Python 缺失仅报错 | P0 | P1 | 0.5d(A)/1.5d(B) | ✅ A+B |
 | NFR-03 | protobuf 依赖共存 | 工程 | — | `golang/protobuf v1.3.5` ↔ `google.golang.org/protobuf`（mcp-go v0.56.0 间接引入）共存 | P1 | P2 | 0.5d | ✅ 编译通过 |
@@ -60,7 +68,7 @@
 - ~~形态 B（CLI shell）~~：原计划降为 P1.5 / 并入 P2；实际实施时直接做成进程内 `analyzer.Analyze` 直调（即下文 Form B），未走 CLI shell 路径。
 
 ### P2 · 原生嵌入 `--mcp` ✅ 已完成（Form B）
-- **形态 B（进程内 `analyzer.Analyze`/`Compare` 直调）**：`cmd/battery-historian/mcp.go` + `mcp_store.go`（主仓，v0.2.0），9 tools / 6 resources / 3 prompts，是 Form A 功能超集，含 P3-B/C 能力。
+- **形态 B（进程内 `analyzer.Analyze`/`Compare` 直调）**：`cmd/battery-historian/mcp.go` + `mcp_store.go`（主仓，v0.3.0），13 tools / 10 resources / 3 prompts，是 Form A 功能超集，含 P3-B/C + P4 能力。
 - 功能：FR-06 ~ FR-11（细分查询 + Resource）、补全 P1 未覆盖项
 - 工程：NFR-01（主仓模块化）、NFR-02(形态B)、NFR-03（protobuf 共存）
 - 交付：`cmd/battery-historian --mcp`，同二进制内嵌 MCP 服务，跳过画图直接出结构化结果。
@@ -70,6 +78,14 @@
 - **P3-B 图表 fallback ✅ 已完成**：`analyzer/chart_v2.go` 用纯 Go `generateV2ChartSVG` 替代 Python 图表，作为 `bugreport://{id}/chart` resource；`generateReportHTML` 生成自包含分析报告页作为 `bugreport://{id}/report` resource。仅适用 Format:2 报告。对应 FR-17/18。
 - **P3-C 健康度评分 ✅ 已完成**：`analyzer/health/health.go` 落地 6 维度加权评分，通过 `query_health` tool + `bugreport://{id}/health` resource + `battery_health_report` prompt 暴露。对应 FR-19。
 - **P3-A Python 3 迁移 ⏸ 未做**：P3-B 的 SVG fallback 已能满足 Format:2 报告需求；legacy Format:1 报告若需 Historian 风格图表仍需 `--mcp_with_chart` + Python 3 + 已迁移的 `scripts/historian.py`。
+
+### P4 · OEM 功耗分析扩展 ✅ 已完成（Form B）
+- **目标**：在 `dumpsys batterystats` 基础上补齐 bugreport 中其他 4 个功耗相关 dumpsys 段，构成「唤醒源归因 + 功耗大户行为佐证」闭环。详见 `OEM功耗分析扩展设计.md`。
+- **4 个解析器 package**：`analyzer/power`（实时 wakelock 快照 + suspend blockers + 省电 drain）、`analyzer/alarm`（pending 队列 + Top-N 重复 alarm）、`analyzer/dumpsysactivity`（ANR/LMK/exits/running 四子段，包名避开顶级 `activity/`）、`analyzer/procstats`（进程状态时长 + RSS 三元组）。
+- **Core 集成**：`ParsedData` 新增 `bugReportContentsA/B` 保存原始文本；`AnalysisResult` 新增 4 字段；`analysisResults()` 末尾一次性解析（不进 `parseBugReport`，主路径零回归），单段失败只置 nil。
+- **MCP 能力**：4 tools（FR-20..23）+ 4 resources（FR-24..27），全部支持 `report_index`，复用 `resultForID` / `primaryResult` 安全校验。
+- **基础设施**：`historianutils.ServiceDumpRE` 升级支持可选 `CRITICAL/HIGH/NORMAL` 前缀（向后兼容）；`bugreportutils.ExtractServiceDump` + `ActivitySubsectionRE` 提供段/子段切分。
+- **端到端验证**：真实 T952K bugreport（73MB）冒烟测试通过，power 2 wakelocks/5 blockers/6 drainStats，alarm 69 pending/20 top，activity 12 LMK/624 exits/83 running，procstats 1586 进程。
 
 ---
 
@@ -106,6 +122,14 @@
 | `query_histogram` | `AnalysisResult.HistogramStats`（`presenter.HistogramStats` `presenter.go:125`） |
 | `query_wakelocks` / `wakeup_reasons` / `sync_tasks` | `Checkin.UserspaceWakelocks` / `WakeupReasons` / `SyncTasks` |
 | `query_health` (P3-C) | `AnalysisResult.Health`（`health.Evaluate` `analyzer/health/health.go:81`） |
+| `query_power` (P4) | `AnalysisResult.PowerSummary`（`power.Parse` `analyzer/power/power.go` ← `bugreportutils.ExtractServiceDump(raw,"power")`） |
+| `query_alarms` (P4) | `AnalysisResult.AlarmSummary`（`alarm.Parse` `analyzer/alarm/alarm.go`，Top-N 在 MCP 层截断） |
+| `query_activity` (P4) | `AnalysisResult.ActivityStats`（`dumpsysactivity.Parse` `analyzer/dumpsysactivity/activity.go`，kind 过滤在 MCP 层） |
+| `query_procstats` (P4) | `AnalysisResult.ProcStats`（`procstats.Parse` `analyzer/procstats/procstats.go`，TopN 在 MCP 层） |
+| `bugreport://{id}/power` (P4) | `*power.Summary` → JSON（完整无裁剪） |
+| `bugreport://{id}/alarms` (P4) | `*alarm.Summary` → JSON（完整无裁剪） |
+| `bugreport://{id}/activity` (P4) | `*dumpsysactivity.Summary` → JSON（完整无裁剪） |
+| `bugreport://{id}/procstats` (P4) | `*procstats.Summary` → JSON（完整无裁剪） |
 | `bugreport://{id}/chart` (P3-B) | `AnalysisResult.PlotHTML`（`generateV2ChartSVG` `chart_v2.go:119` fallback） |
 | `bugreport://{id}/report` (P3-B) | `AnalysisResult.ReportHTML`（`generateReportHTML` `chart_v2.go:301`） |
 | 既有 CLI 兜底 | `cmd/checkin-parse`、`cmd/history-parse`、`cmd/checkin-delta`、`cmd/healthcheck`（P3-C） |
@@ -159,5 +183,16 @@ import 路径 bug 已批量修复，并完成一轮 code review 发现的 14 项
 5. **【P1 新增】Compare B 报告可通过 `report_index` 访问**：全部 7 个 query_* 工具新增可选 `report_index` 参数（默认 0=A，1=B），`resultForID` / `reportIndexFromReq` helper 校验范围；A/B 对比的 B 报告现在可被任意 query_* 工具访问（原 `resultForID` 恒返回 `Results[0]`，B 报告无法查）。
 6. **【P1 修复】`UsingComparison` 判定**：`Compare` 增加 `&& results[0].IsDiff` 校验，避免两份独立报告被误判为 delta。
 7. **【P1 修复】report/chart 图表一致性**：`generateReportHTML` 签名从 `(r, contents string)` 改为 `(r, plotHTML string)`，直接复用 `r.PlotHTML`，避免重新解析 V2 bugreport 导致 `/report` 与 `/chart` 图表不一致。
+
+### 2026-07-19 P4（OEM 功耗分析扩展）落地回填
+依据 `OEM功耗分析扩展设计.md` 实施 P0 阶段，新增 4 个 dumpsys 段解析器与对应 MCP 能力，对需求矩阵做同步回填：
+
+1. **§二主表新增 FR-20..27**：4 个 query tool（FR-20 `query_power` / FR-21 `query_alarms` / FR-22 `query_activity` / FR-23 `query_procstats`）+ 4 个 resource（FR-24..27），全部 Form B only，支持 `report_index`，复用 `resultForID` / `primaryResult` 安全校验。
+2. **§三 P2 段落能力数升级**：Form B 版本号 v0.2.0→v0.3.0，能力数 9/6/3→13/10/3。
+3. **§三新增 P4 子段**：4 个解析器 package 路径、Core 集成方式（`analysisResults()` 末尾一次性解析，主路径零回归）、MCP 能力清单、基础设施依赖、端到端验证结论。
+4. **§五速查表追加 8 行**：4 个 tool + 4 个 resource 的直接复用路径，含 `bugreportutils.ExtractServiceDump` 段抽取入口。
+5. **`report_index` 覆盖范围扩展**：原 7 个 query_* 工具 → 现 11 个 query_* 工具（新增 4 个 P4 工具全部支持 `report_index`），A/B 对比的 B 报告可被任意 query_* 工具访问。
+6. **包路径约定**：dumpsys activity 段解析器放 `analyzer/dumpsysactivity` 子包（避开已被占用的顶级 `activity/` 包），其余三个直接放 `analyzer/<name>`。
+7. **安全继承 NFR-04**：4 个新 tool / resource 全部走 `resultForID` / `primaryResult`，段原文不直接返回（避免超大 bugreport 整段塞给 MCP 客户端），只返回结构化 JSON；`ANRRecord.FullText` 截断 4KB。
 
 > 对应设计侧修订见 `MCP概要设计.md` 第十二节。

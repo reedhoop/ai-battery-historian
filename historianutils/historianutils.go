@@ -32,7 +32,11 @@ var (
 	// The optional priority token (CRITICAL / HIGH / NORMAL) introduced in newer
 	// bugreports is NOT captured — only the service name goes into the `service`
 	// group, so all existing call sites keep working.
-	ServiceDumpRE = regexp.MustCompile(`^DUMP\s+OF\s+SERVICE\s+(?:CRITICAL|HIGH|NORMAL\s+)?(?P<service>\S+):`)
+	//
+	// 注意：\s+ 必须放在可选组内部、优先级 token 之后，否则 `CRITICAL` 被消费
+	// 但紧跟的空格会让 `(?P<service>\S+)` 失配，导致 `DUMP OF SERVICE CRITICAL power:`
+	// 整行无法匹配（早期 bug 版本 `(?:CRITICAL|HIGH|NORMAL\s+)?` 即犯此错）。
+	ServiceDumpRE = regexp.MustCompile(`^DUMP\s+OF\s+SERVICE\s+(?:(?:CRITICAL|HIGH|NORMAL)\s+)?(?P<service>\S+):`)
 
 	// piiEmailRE is a regular expression to match any PII string of the form abc@xxx.yyy.
 	piiEmailRE = regexp.MustCompile(`(?P<prefix>\S+/)?` + `(?P<account>\S+)` + `@` + `(?P<suffix>\S+\.\S+)`)

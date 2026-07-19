@@ -354,12 +354,71 @@ type ProcessState struct {
 
 | Tool | Input | Output | 底层 |
 |---|---|---|---|
-| `query_power` | `{id, report_index?}` | `*power.Summary`（含实时 wakelock 快照、suspend blockers、UID 状态、battery saver drain） | `AnalysisResult.PowerSummary` |
-| `query_alarms` | `{id, report_index?, topN?}` | `*alarm.Summary`（含 pending alarms + Top-N 排名） | `AnalysisResult.AlarmSummary` |
-| `query_activity` | `{id, report_index?, kind?}` | `*activity.Summary`（含 ANR / LMK / 进程退出 / 运行中进程） | `AnalysisResult.ActivityStats` |
-| `query_procstats` | `{id, report_index?, topN?}` | `*procstats.Summary`（含每进程状态时长分布 + 内存 RSS） | `AnalysisResult.ProcStats` |
+| `query_power` | `{id, report_index?, minHeldMs?}` | `*power.Summary`（含实时 wakelock 快照、suspend blockers、UID 状态、battery saver drain） | `AnalysisResult.PowerSummary` |
+| `query_alarms` | `{id, report_index?, topN?, package?, wakeupOnly?}` | `*alarm.Summary`（含 pending alarms + Top-N 排名） | `AnalysisResult.AlarmSummary` |
+| `query_activity` | `{id, report_index?, kind?, topN?, package?, reason?, minRssKB?, oomAdjMax?}` | `*activity.Summary`（含 ANR / LMK / 进程退出 / 运行中进程） | `AnalysisResult.ActivityStats` |
+| `query_procstats` | `{id, report_index?, topN?, package?, minPercent?}` | `*procstats.Summary`（含每进程状态时长分布 + 内存 RSS） | `AnalysisResult.ProcStats` |
 
-> `query_activity` 的 `kind` 参数（enum: `anr` / `lmk` / `exits` / `running` / `all`）默认 `all`，让 AI 客户端可只取关心的一类，减少 token。
+> **精细化参数设计（v0.3.1+）**：dumpsys activity 单段可达数万行（T807D 真机 exits=624 / running=83，vegas_g exits=1740），默认 `kind=all` 全返回会导致 LLM 单次 tool 返回 token 爆炸。改造为"LLM 多轮 + tool 精细化参数"模式：
+>
+> - **topN（默认 20）**：4 个 tool 统一支持，每个子段最多返回 N 条；`topN=0` 表示不限制；`topN=5` 适合做概览
+> - **package（子串，大小写不敏感）**：`query_activity` / `query_alarms` / `query_procstats` 共用，按包名缩小范围
+> - **reason（子串）**：`query_activity` 专用，按退出原因过滤（如 `reason=CRASH` / `reason=ANR` / `reason=OTHER KILLS`）
+> - **minRssKB（数值下限）**：`query_activity` 专用，过滤低 RSS 进程（如 `minRssKB=200000` 只看 RSS≥200MB 的）
+> - **oomAdjMax（数值上限）**：`query_activity` 专用，按 oom_adj 上限过滤（如 `oomAdjMax=-800` 只看前台及以上进程）
+> - **minPercent（数值下限）**：`query_procstats` 专用，过滤低占用进程（如 `minPercent=1.0` 跳过 <1% 噪声）
+> - **wakeupOnly（布尔）**：`query_alarms` 专用，只返回唤醒型 alarm（Type 含 `_WAKEUP`）
+> - **minHeldMs（数值下限）**：`query_power` 专用，过滤短暂持有的 wakelock（如 `minHeldMs=60000` 只看持有 ≥1 分钟的锁）
+>
+> **推荐多轮工作流**：
+> 1. 第 1 轮：`query_activity kind=all, topN=5` → 拿到每个子段 Top 5 概览
+> 2. 第 2 轮：发现 `com.foo` 频繁退出 → `query_activity kind=exits, package=com.foo, topN=50`
+> 3. 第 3 轮：怀疑内存压力 → `query_activity kind=running, minRssKB=200000`
+> 4. 第 4 轮：确认是 crash → `query_activity kind=exits, reason=CRASH`
+>
+> `query_activity` 单 kind 模式额外返回 `processExitsTotal` / `runningTotal` 字段，让 LLM 判断是否被 topN 截断、是否需要再调一次 `topN=0` 拿全部。
+
+### 5.1.1 历史工具的精细化参数改造（v0.3.2）
+
+除 P4 新增的 4 个 dumpsys 段工具外，对原有 batterystats 聚合工具也按"LLM 多轮 + tool 精细化参数"原则做了改造。改造依据是 5 个真机 bugreport 的实测数据：
+
+| Bugreport | Checkin 全量 | UserspaceWakelocks | AppStats |
+|---|---|---|---|
+| 9185W | 297 KB | 295 条 / 74 KB | 114 条 / 332 KB |
+| T705M | 141 KB | 51 条 / 12 KB | 76 条 / 73 KB |
+| T807D (Android 17) | 133 KB | 52 条 / 11 KB | 71 条 / 83 KB |
+| **T952K** | **563 KB** | **658 条 / 192 KB** | **160 条 / 688 KB** |
+| vegas_g | 194 KB | 25 条 / 5 KB | 116 条 / 86 KB |
+
+**`query_system_stats` 拆分 section 参数**（原直接返回整个 `r.Checkin`，T952K 高达 563 KB）：
+
+| section | 返回内容 | 估算大小 |
+|---|---|---|
+| `overview`（默认） | metadata + system summary + 所有 `Agg*` 聚合字段（不含列表） | ~5 KB |
+| `wakelocks` | UserspaceWakelocks + KernelWakelocks + AggKernelWakelocks | ~200 KB（topN=20 后 ~10 KB） |
+| `sync` | SyncTasks + AggSyncTasks + ScheduledJobs + AggScheduledJobs | ~5 KB |
+| `network` | TopMobileTrafficApps + TopWifiTrafficApps + WifiScanActivity + WifiFullLockActivity | ~10 KB |
+| `power` | DevicePowerEstimates + TopMobileActiveApps + discharge 字段 | ~10 KB |
+| `cpu` | CPUUsage + AggCPUUsage | ~5 KB |
+| `wakeups` | WakeupReasons + AppWakeups + AppWakeupsByAlarmName + 聚合 | ~10 KB |
+| `anr` | ANRAndCrash + TotalAppANR* + TotalAppCrash* | ~2 KB |
+| `histogram` | ScreenBrightness / SignalStrength / WifiSignalStrength / BluetoothState / DataConnection maps | ~5 KB |
+| `all` | 完整 Checkin（保留兼容，不推荐默认调用） | 100–600 KB |
+
+`topN`（默认 20）对列表类 section 生效；wakelocks/sync/network/power/cpu/wakeups 还返回 `*Total` 字段让 LLM 判断是否被截断。
+
+**`query_wakelocks` 新增 topN + minDurationMs**（原 T952K userspace 658 条 / 192 KB 全返回）：
+- `topN`（默认 20）：每类 wakelock 最多返回 N 条
+- `minDurationMs`：按总 Duration 下限过滤短时 wakelock
+- 额外返回 `userspaceTotal` / `kernelTotal` 让 LLM 判断是否被截断
+
+**`query_app_stats` / `query_histogram` / `query_wakeup_reasons` / `query_sync_tasks` 维持现状**：前两者已有 topN 过滤；后两者实测最大 9 条 / 16 条，数据量天然可控。
+
+**推荐多轮工作流（系统级分析）**：
+1. 第 1 轮：`query_system_stats section=overview` → 拿到全局聚合指标（~5 KB）
+2. 第 2 轮：发现 `aggKernelWakelocks.Duration` 异常 → `query_system_stats section=wakelocks, topN=20`
+3. 第 3 轮：发现某 wakelock 名字可疑 → `query_wakelocks kind=userspace, minDurationMs=60000` 深挖
+4. 第 4 轮：怀疑网络耗电 → `query_system_stats section=network` 看流量大户
 
 ### 5.2 新增 Resources（4 个）
 对应 4 个段的完整 JSON，方便 AI 客户端按需拉取超大原始数据。
@@ -689,3 +748,6 @@ func powerResourceHandler(ctx context.Context, req mcp.ReadResourceRequest) ([]m
 | 日期 | 修订内容 |
 |---|---|
 | 2026-07-19 | 初版。基于 `_samples/bugreport-T952K_EEA-BP2A.250605.031.A3-2026-07-13-22-30-48.txt`（73MB，Android 14，MTK 平台）核对真实格式后起草。 |
+| 2026-07-19 | Android 17（reportVersion 36）兼容性优化。基于 `_samples/bugreport-T807D_EEA-CP2A.260306.002-2026-06-12-03-42-34.txt` 真机数据 + WSL 中 Android 17 AOSP 源码 review，修正 5 个解析器：(1) `power.wakeLockRE` 重写以支持 `isFrozen` / `isAttributedUidCached` / `powerGroupId` 新字段；(2) `power.drainStatFullRE/ContRE` 的 `mah/pct/mahh` 从 `[\d,]+` 改为 `[\d.,]+` 兼容 en_US locale；(3) `alarm` 新增 `AggregateTopAlarms` 字段，对应 AOSP dumpsys alarm "Top Alarms:" 段（按 aggregateTime 降序，区别于 pending 队列按 repeatInterval 排序的 `TopAlarms`）；(4) `procstats.stateLineRE` 的 `pct` 改为 `[\d.,]+`，`rssRE` 支持可选单位（KB/MB/GB，<1MB 无单位）；(5) `activity.exitReasonRE` 的 `reason/subreason` 改为 `.*?` 处理嵌套括号（如 `APP CRASH(EXCEPTION)`），`exitRssRE/procRssRE` 支持可选单位。`checkinparse` 同步升级：`maxParseReportVersion` 从 21 提到 36，`parseAppStateTime` 新增 rv36 分支按 Android 17 字段顺序（top/fs/fore/back/topSleep/heavyWeight/cached），`parseAppWakelock` 新增 rv36 分支解析 4 类 wakelock（新增 `bp` 背景_partial 段，4×6=24 字段），`parseSection` switch 显式容忍 9 个新 section（rpm/gcf/ctf/fgs/awl/jbc/jbd/wmc/wmct）。`analyzer/p4_smoke_test.go` 改为参数化遍历 `_samples/bugreport-*.txt`，5 个样本（含 T807D Android 17）全部端到端冲烟通过。 |
+| 2026-07-19 | 4 个 query_* 工具精细化参数改造（v0.3.1）。真机数据显示 dumpsys activity 单段数据量巨大（T807D exits=624/running=83，vegas_g exits=1740/running=65），原 `kind=all` 默认全返回会导致 LLM 单次 tool 返回 token 爆炸。改造为"LLM 多轮 + tool 精细化参数"模式：4 个 tool 统一支持 `topN`（默认 20）；`query_activity` 新增 `package` / `reason` / `minRssKB` / `oomAdjMax` 4 个过滤参数，单 kind 模式额外返回 `processExitsTotal` / `runningTotal` 让 LLM 判断是否被截断；`query_alarms` 新增 `package` / `wakeupOnly`；`query_procstats` 新增 `package` / `minPercent`；`query_power` 新增 `minHeldMs`。`mcp.go` 新增 `argBool` / `containsFold` helper + `filterAlarms` / `filterProcessExits` / `filterRunningProcesses` / `truncActivitySlice` 4 个过滤函数。5 个 bugreport 冲烟测试全通过。 |
+| 2026-07-19 | 历史工具精细化参数改造（v0.3.2）。实测 T952K `r.Checkin` 全量 JSON 达 563 KB（含 658 条 userspace wakelock / 192 KB），原 `query_system_stats` 直接返回整个 proto 会撑爆 LLM token。`query_system_stats` 拆分为 `section` 参数（默认 `overview`，可选 wakelocks/sync/network/power/cpu/wakeups/anr/histogram/all），`overview` 只返回 metadata + system summary + Agg* 聚合字段（~5 KB），其他 section 按主题深挖且支持 `topN`（默认 20）截断。`query_wakelocks` 新增 `topN` + `minDurationMs`，避免 T952K 658 条 userspace wakelock 全返回。新增 `truncAggregatedActivity` / `truncAggregatedNetwork` / `truncAggregatedPower` / `truncAggregatedRate` / `truncAggregatedCPU` 5 个泛型截断 helper + `filterAndTruncWakelocks` 过滤函数。`query_app_stats`（已有 topN）/ `query_histogram`（数据量小）/ `query_wakeup_reasons`（实测 ≤9 条）/ `query_sync_tasks`（实测 ≤16 条）维持现状。5 个 bugreport 冲烟测试全通过。 |

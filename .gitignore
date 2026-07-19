@@ -35,3 +35,12 @@ desktop.ini
 
 # 临时解压目录
 _bugreport_extract/
+
+# AOSP 源码 review 期间的临时样本和调试脚本
+_aosp_review/
+
+# 真机 bugreport 样本目录（含隐私数据，不入库）
+_samples/
+
+# 临时脚本
+_tmp_*.sh

@@ -18,7 +18,11 @@ import (
 	"fmt"
 
 	"github.com/reedhoop/ai-battery-historian/aggregated"
+	"github.com/reedhoop/ai-battery-historian/analyzer/alarm"
+	"github.com/reedhoop/ai-battery-historian/analyzer/dumpsysactivity"
 	"github.com/reedhoop/ai-battery-historian/analyzer/health"
+	"github.com/reedhoop/ai-battery-historian/analyzer/power"
+	"github.com/reedhoop/ai-battery-historian/analyzer/procstats"
 	bspb "github.com/reedhoop/ai-battery-historian/pb/batterystats_proto"
 	"github.com/reedhoop/ai-battery-historian/presenter"
 )
@@ -62,6 +66,18 @@ type AnalysisResult struct {
 	// not be scored, e.g. an unsupported bug-report version or a critical
 	// parse error (CriticalError set).
 	Health *health.Report
+
+	// P4（OEM 功耗分析扩展）：其他 dumpsys 段解析结果。nil 表示该段在
+	// bugreport 中不存在或解析失败（不阻塞主流程）。每个字段的解析独立，
+	// 单个失败不影响其他字段。
+	//
+	// 包路径约定：为避免与现有顶级 activity 包（解析 activity manager
+	// 事件、输出 CSV）冲突，dumpsys activity 段的解析器放在
+	// analyzer/dumpsysactivity 子包，其余三个直接放 analyzer/<name>。
+	PowerSummary  *power.Summary           // dumpsys power
+	AlarmSummary  *alarm.Summary           // dumpsys alarm
+	ActivityStats *dumpsysactivity.Summary // dumpsys activity（含 ANR / LMK / 进程退出 / 运行中进程）
+	ProcStats     *procstats.Summary       // dumpsys procstats
 }
 
 // AnalysisResults is the set of per-report results from a single analysis or
@@ -161,6 +177,20 @@ func (pd *ParsedData) analysisResults() AnalysisResults {
 		// P3-C: score battery health when the report parsed cleanly.
 		if r.CriticalError == "" {
 			r.Health = health.Evaluate(r.Checkin, r.HistogramStats)
+		}
+		// P4: 解析其他 dumpsys 段（power/alarm/dumpsysactivity/procstats）。
+		// 不阻塞主流程：单段失败只把对应字段留 nil，不影响其他段。
+		// 与 postProcess 同样的索引规则：result[0] 用 contentsA，
+		// result[i>0] 用 contentsB（若有）。
+		raw := pd.bugReportContentsA
+		if i > 0 && pd.bugReportContentsB != "" {
+			raw = pd.bugReportContentsB
+		}
+		if raw != "" {
+			r.PowerSummary, _ = power.Parse(raw)
+			r.AlarmSummary, _ = alarm.Parse(raw)
+			r.ActivityStats, _ = dumpsysactivity.Parse(raw)
+			r.ProcStats, _ = procstats.Parse(raw)
 		}
 		out = append(out, r)
 	}

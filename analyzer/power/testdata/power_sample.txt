@@ -1,0 +1,172 @@
+DUMP OF SERVICE CRITICAL power:
+Service host process PID: 1952
+Threads in use: 0/32
+Client PIDs: 21572, 20028, 18784
+POWER MANAGER (dumpsys power)
+
+Power Manager State:
+  Settings power_manager_constants:
+    no_cached_wake_locks=true
+  mDirty=0x0
+  mWakefulness=Awake
+  mWakefulnessChanging=false
+  mIsPowered=true
+  mPlugType=1
+  mBatteryLevel=13
+  mDreamsBatteryLevelDrain=0
+  mDockState=0
+  mStayOn=false
+  mProximityPositive=false
+  mBootCompleted=true
+  mSystemReady=true
+  mUseAutoSuspend=true
+  mHalAutoSuspendModeEnabled=false
+  mHalInteractiveModeEnabled=true
+  mWakeLockSummary=0x1
+  mNotifyLongScheduled=+14s121ms
+  mNotifyLongDispatched=-47s832ms
+  mNotifyLongNextCheck=(none)
+  mRequestWaitForNegativeProximity=false
+  mInterceptedPowerKeyForProximity=false
+  mSandmanScheduled=false
+  mBatteryLevelLow=false
+  mLightDeviceIdleMode=false
+  mDeviceIdleMode=false
+  mDeviceIdleWhitelist=[1000, 1001, 2000, 2951, 10075, 10076]
+  mDeviceIdleTempWhitelist=[10182]
+  mLowPowerStandbyActive=false
+  mLastWakeTime=4342927 (1696863 ms ago)
+  mLastSleepTime=3987051 (2052739 ms ago)
+  mLastSleepReason=timeout
+  mLastGlobalWakeTimeRealtime=14982204 (in 8942414 ms)
+  mLastGlobalSleepTimeRealtime=13999650 (in 7959860 ms)
+  mLastInteractivePowerHintTime=6034600 (5190 ms ago)
+  mLastScreenBrightnessBoostTime=0 (6039790 ms ago)
+  mScreenBrightnessBoostInProgress=false
+  mHoldingWakeLockSuspendBlocker=true
+  mHoldingDisplaySuspendBlocker=true
+  mLastFlipTime=0
+  mIsFaceDown=false
+
+Settings and Configuration:
+  mDecoupleHalAutoSuspendModeFromDisplayConfig=true
+  mDecoupleHalInteractiveModeFromDisplayConfig=true
+  mWakeUpWhenPluggedOrUnpluggedConfig=true
+  mWakeUpWhenPluggedOrUnpluggedInTheaterModeConfig=false
+  mTheaterModeEnabled=false
+  mKeepDreamingWhenUnplugging=false
+  mSuspendWhenScreenOffDueToProximityConfig=true
+  mDreamsSupportedConfig=true
+  mDreamsEnabledByDefaultConfig=false
+  mDreamsActivatedOnSleepByDefaultConfig=true
+  mDreamsActivatedOnDockByDefaultConfig=false
+  mDreamsActivatedWhilePosturedByDefaultConfig=false
+  mDreamsEnabledOnBatteryConfig=false
+  mDreamsBatteryLevelMinimumWhenPoweredConfig=-1
+  mDreamsBatteryLevelMinimumWhenNotPoweredConfig=15
+  mDreamsBatteryLevelDrainCutoffConfig=5
+  mDreamsEnabledSetting=false
+  mDreamsActivateOnSleepSetting=true
+  mDreamsActivateOnDockSetting=false
+  mDreamsActivateWhilePosturedSetting=false
+  mDozeAfterScreenOff=true
+  mBrightWhenDozingConfig=false
+  mMinimumScreenOffTimeoutConfig=10000
+  mMaximumScreenDimDurationConfig=7000
+  mMaximumScreenDimRatioConfig=0.20000005
+  mAttentiveTimeoutConfig=-1
+  mAttentiveTimeoutSetting=-1
+  mAttentiveWarningDurationConfig=30000
+  mScreenOffTimeoutSetting=60000
+  mSleepTimeoutSetting=-1
+  mMaximumScreenOffTimeoutFromDeviceAdmin=9223372036854775807 (enforced=false)
+  mStayOnWhilePluggedInSetting=0
+  mUserActivityTimeoutOverrideFromWindowManager=-1
+  mUserInactiveOverrideFromWindowManager=false
+  mDozeScreenStateOverrideFromDreamManager=1
+  mDrawWakeLockOverrideFromSidekick=false
+  mDozeScreenBrightnessOverrideFromDreamManager=1
+  mUseNormalBrightnessForDoze=false
+  mScreenBrightnessMinimum=0.008308895
+  mScreenBrightnessMaximum=1.0
+  mScreenBrightnessDefault=0.24416804
+  mDoubleTapWakeEnabled=false
+  mForegroundProfile=0
+  mUserId=0
+
+Attentive timeout: -1 ms
+Sleep timeout: -1 ms
+Screen off timeout: 60000 ms
+Screen dim duration: 7000 ms
+
+UID states (changing=false changed=false):
+  UID 1000:   ACTIVE  count=0 state=0
+  UID 1001:   ACTIVE  count=0 state=0
+  UID 1027:   ACTIVE  count=0 state=0
+  UID 1041: INACTIVE  count=1 state=20
+  UID 1068:   ACTIVE  count=0 state=0
+  UID 1073:   ACTIVE  count=0 state=0
+  UID 2951: INACTIVE  count=0 state=19
+  UID u0a73:   ACTIVE  count=0 state=15
+  UID u0a76: INACTIVE  count=0 state=19
+  UID u0a78:   ACTIVE  count=0 state=6
+  UID u0a83: INACTIVE  count=0 state=19
+  UID u0a85: INACTIVE  count=0 state=19
+  UID u0a89:   ACTIVE  count=0 state=5
+  UID u0a94:   ACTIVE  count=0 state=6
+  UID u0a106:   ACTIVE  count=0 state=0
+  UID u0a180:   ACTIVE  count=1 state=5
+  UID u0i14:   ACTIVE  count=0 state=5
+  UID u0i15: INACTIVE  count=0 state=17
+
+Looper state:
+  Looper (PowerManagerService, tid 60) {9b2417}
+    (MessageQueue is using Concurrent implementation)
+    State: android.os.MessageQueue$TimedParkStateNode@2709022
+    PriorityQueue Messages:
+    AsyncPriorityQueue Messages:
+    Message 1: { when=+1s930ms what=1 target=com.android.server.display.AutomaticBrightnessController$AutomaticBrightnessHandler }
+    Message 2: { when=+14s121ms what=4 target=android.os.Handler }
+    Message 3: { when=+47s810ms what=1 target=android.os.Handler }
+    (Total messages: 4, polling=true, quitting=false)
+
+Wake Locks: size=2
+  PARTIAL_WAKE_LOCK                 'AudioIn' ACQ=-15m12s377ms LONG (uid=1041 ws=WorkSource{ chains=WorkChain{(99014), (1041)}})
+  PARTIAL_WAKE_LOCK                 '*gms_scheduler*/com.google.android.gms/.clearcut.uploader.QosUploaderService' ACQ=-6s304ms (uid=10180 pid=3853 ws=WorkSource{10180 com.google.android.gms})
+
+Suspend Blockers: size=5
+  PowerManagerService.Booting: ref count=0 []
+  PowerManagerService.WakeLocks: ref count=1 [unknown: (07-13 22:02:39.565)]
+  PowerManagerService.Display: ref count=1 [holding display: (07-13 22:02:34.339)]
+  PowerManagerService.Broadcasts: ref count=0 []
+  PowerManagerService.WirelessChargerDetector: ref count=0 []
+
+Display Power: com.android.server.power.PowerManagerService$1@223eab3
+
+Battery saving stats:
+  Battery Saver is currently: OFF
+    Times full enabled: 0
+    Times adaptive enabled: 0
+
+  Drain stats:
+                     Battery saver OFF                          ON
+  NonDoze NonIntr:     15m      0mAh(  0%)      0,0mAh/h          0m      0mAh(  0%)      0,0mAh/h
+             Intr:     43m    855mAh( 15%)   1186,9mAh/h          0m      0mAh(  0%)      0,0mAh/h
+  Deep    NonIntr:    215m    171mAh(  3%)     47,5mAh/h          0m      0mAh(  0%)      0,0mAh/h
+             Intr:      1m      0mAh(  0%)      0,0mAh/h          0m      0mAh(  0%)      0,0mAh/h
+  Light   NonIntr:      0m      0mAh(  0%)      0,0mAh/h          0m      0mAh(  0%)      0,0mAh/h
+             Intr:      0m      0mAh(  0%)      0,0mAh/h          0m      0mAh(  0%)      0,0mAh/h
+
+Battery saver policy (*NOTE* they only apply when battery saver is ON):
+  Settings: battery_saver_constants
+    value:
+  Settings: (overlay)
+    value:
+  DeviceConfig: battery_saver
+    location_mode:
+  mAccessibilityEnabled=false
+  mAutomotiveProjectionActive=false
+  mPolicyLevel=0
+
+  Policy 'default full'
+    advertise_is_enabled=true

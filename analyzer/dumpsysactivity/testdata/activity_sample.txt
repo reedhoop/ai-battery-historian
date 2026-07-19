@@ -1,0 +1,99 @@
+DUMP OF SERVICE CRITICAL activity:
+ACTIVITY MANAGER ACTIVITIES (dumpsys activity activities)
+  ResumedActivity: ActivityRecord{abc123 u0 com.tcl.android.launcher/.uioverrides.TclQuickstepLauncher t123}
+  TopResumedActivity: ActivityRecord{abc123 u0 com.tcl.android.launcher/.uioverrides.TclQuickstepLauncher t123}
+
+-------------------------------------------------------------------------------
+ACTIVITY MANAGER LAST ANR (dumpsys activity lastanr)
+ANR in com.example.app (com.example.app/.MainActivity)
+  PID: 12345
+  Reason: Input dispatching timed out (com.example.app/com.example.app.MainActivity (Server) is not responding. Waited 5000ms for FocusEvent)
+  Load: 8.5 / 8.4 / 8.2
+  ----- Output from /proc/pressure/memory -----
+  some avg10=42.5 avg60=38.2 avg300=21.0 total=987654321
+  full avg10=12.3 avg60=10.1 avg300=5.4 total=123456789
+  Java stack:
+    at android.app.ActivityThread.performLaunchActivity(ActivityThread.java:4000)
+    at com.example.app.MainActivity.onCreate(MainActivity:45)
+
+-------------------------------------------------------------------------------
+ACTIVITY MANAGER STARTER (dumpsys activity starter)
+mLastHomeActivityStartResult=0
+
+-------------------------------------------------------------------------------
+ACTIVITY MANAGER PROCESS EXIT INFO (dumpsys activity exit-info)
+Last Timestamp of Persistence Into Persistent Storage: 2026-07-13 21:27:29.627
+  package: com.google.android.apps.restore
+    Historical Process Exit for uid=10173
+        ApplicationExitInfo #0:
+          timestamp=2026-07-13 22:15:35.343 pid=8952 realUid=10173 packageUid=10173 definingUid=10173 user=0
+          process=com.google.android.apps.restore reason=13 (OTHER KILLS BY SYSTEM) subreason=3 (TOO MANY EMPTY PROCS) status=0
+          importance=400 pss=0,00 rss=96MB description=too many empty state=empty trace=null
+        ApplicationExitInfo #1:
+          timestamp=2026-07-13 22:09:53.245 pid=2360 realUid=10173 packageUid=10173 definingUid=10173 user=0
+          process=com.google.android.apps.restore reason=2 (SIGNALED) subreason=0 (UNKNOWN) status=9
+          importance=400 pss=0,00 rss=93MB description=tguard-kill-cacheApp state=empty trace=null
+  package: com.google.android.inputmethod.latin
+    Historical Process Exit for uid=10194
+        ApplicationExitInfo #0:
+          timestamp=2026-07-13 22:07:15.284 pid=4382 realUid=10194 packageUid=10194 definingUid=10194 user=0
+          process=com.google.android.inputmethod.latin reason=16 (PACKAGE UPDATED) subreason=0 (UNKNOWN) status=0
+          importance=200 pss=0,00 rss=254MB description=stop com.google.android.inputmethod.latin due to installPackageLI state=empty trace=null
+
+-------------------------------------------------------------------------------
+ACTIVITY MANAGER LMK KILLS (dumpsys activity lmk)
+  Total number of kills: 2
+    kills at or below oom_adj 999: 2
+    kills at or below oom_adj 900: 0
+    kills at or below oom_adj 800: 0
+    kills at or below oom_adj 700: 0
+    kills at or below oom_adj 600: 0
+    kills at or below oom_adj 500: 0
+    kills at or below oom_adj 400: 0
+    kills at or below oom_adj 300: 0
+    kills at or below oom_adj 250: 0
+    kills at or below oom_adj 200: 0
+    kills at or below oom_adj 100: 0
+    kills at or below oom_adj 0: 0
+
+-------------------------------------------------------------------------------
+ACTIVITY MANAGER RUNNING PROCESSES (dumpsys activity processes)
+  All known processes:
+  *PERS* UID 1000 ProcessRecord{961ff16 4618:com.tct.iris/1000}
+    user #0 uid=1000 gids={2001, 1065, 3002, 3003, 1013, 3001, 3007, 1007, 1096, 1000, 9997, 1079, 1077}
+    class=com.tct.iris.App
+    pid=4618
+    persistent=true removed=false
+    oom adj: max=-800 curRaw=-800 setRaw=-800 cur=-800 set=-800
+    curProcState=0 mRepProcState=0 setProcState=0 lastStateTime=-1h36m50s563ms
+    lastRss=83MB lastCachedRss=0,00
+  *PERS* UID 1001 ProcessRecord{dbc0f3d 3327:com.mediatek.ims/1001}
+    user #0 uid=1001 gids={1065, 3002, 3003, 3001, 3007, 1024}
+    class=com.mediatek.ims.ImsApp
+    pid=3327
+    persistent=true removed=false
+    oom adj: max=-800 curRaw=-800 setRaw=-800 cur=-800 set=-800
+    curProcState=0 mRepProcState=0 setProcState=0 lastStateTime=-1h40m33s841ms
+    lastRss=74MB lastCachedRss=0,00
+  *APP* UID 10078 ProcessRecord{2ec3311 23392:com.tcl.ai.ability/u0a78}
+    user #0 uid=10078 gids={3003, 50078, 20078, 9997}
+    class=com.tcl.ai.ability.AiApp
+    pid=23392
+    persistent=false removed=false
+    oom adj: max=1001 curRaw=100 setRaw=100 cur=100 set=100
+    curProcState=6 mRepProcState=6 setProcState=6 lastStateTime=-8m10s572ms
+    lastRss=85MB lastCachedRss=121MB
+  *APP* UID 10180 ProcessRecord{a1b2c3d 3853:com.google.android.gms/u0a180}
+    user #0 uid=10180 gids={3003, 50078, 20078, 9997}
+    class=com.google.android.gms.app
+    pid=3853
+    persistent=false removed=false
+    oom adj: max=100 curRaw=0 setRaw=0 cur=0 set=0
+    curProcState=2 mRepProcState=2 setProcState=2 lastStateTime=-15s500ms
+    lastRss=234MB lastCachedRss=0,00
+
+  Total persistent processes: 10
+  mProcessesReady=true mSystemReady=true mBooted=true
+-------------------------------------------------------------------------------
+ACTIVITY MANAGER USERS (dumpsys activity users)
+  User #0

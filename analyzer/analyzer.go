@@ -191,6 +191,12 @@ type ParsedData struct {
 	// script emit its interactive chart (drops the "-c" disable-chart flag).
 	// Used by the MCP chart resource (P3-B).
 	drawPlot bool
+
+	// bugReportContentsA/B 保存原始 bugreport 文本，供 analysisResults()
+	// 末尾的 dumpsys 段解析器（power/alarm/dumpsysactivity/procstats）使用。
+	// 与 postProcess 同样的索引规则：result[0] 用 A，result[i>0] 用 B。
+	bugReportContentsA string
+	bugReportContentsB string
 }
 
 // BatteryStatsInfo holds the extracted batterystats details for a bugreport.
@@ -667,6 +673,10 @@ func writeTempFile(contents string) (string, error) {
 // checkin start times are the same, a diff of the checkins will be saved, otherwise, they will be
 // saved as separate reports.
 func (pd *ParsedData) parseBugReport(fnameA, contentsA, fnameB, contentsB string) error {
+	// 保存原始 bugreport 文本，供 analysisResults() 末尾的 dumpsys 段解析器
+	// （power/alarm/dumpsysactivity/procstats）使用。不参与主解析路径。
+	pd.bugReportContentsA = contentsA
+	pd.bugReportContentsB = contentsB
 
 	doActivity := func(ch chan activity.LogsData, contents string, pkgs []*usagepb.PackageInfo) {
 		ch <- activity.Parse(pkgs, contents)
