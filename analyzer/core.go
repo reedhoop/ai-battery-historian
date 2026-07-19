@@ -23,6 +23,7 @@ import (
 	"github.com/reedhoop/ai-battery-historian/analyzer/health"
 	"github.com/reedhoop/ai-battery-historian/analyzer/power"
 	"github.com/reedhoop/ai-battery-historian/analyzer/procstats"
+	"github.com/reedhoop/ai-battery-historian/parseutils"
 	bspb "github.com/reedhoop/ai-battery-historian/pb/batterystats_proto"
 	"github.com/reedhoop/ai-battery-historian/presenter"
 )
@@ -66,6 +67,17 @@ type AnalysisResult struct {
 	// not be scored, e.g. an unsupported bug-report version or a critical
 	// parse error (CriticalError set).
 	Health *health.Report
+
+	// LevelSummaries is the per-segment (battery-level-drop) time-indexed
+	// series, retained for windowed health re-scoring (P3-C time-range).
+	// It carries StartTimeMs/EndTimeMs per segment plus per-segment stats
+	// (screen on/off, wakelocks, syncs/wakeups, idle/doze). No JSON
+	// tag → not serialized to the programmatic/MCP response (internal only).
+	LevelSummaries []parseutils.ActivitySummary `json:"-"`
+
+	// DeviceCapacityMah is the battery capacity in mAh, needed to convert
+	// level-drop points into mAh for windowed discharge-rate scoring.
+	DeviceCapacityMah float32 `json:"-"`
 
 	// P4（OEM 功耗分析扩展）：其他 dumpsys 段解析结果。nil 表示该段在
 	// bugreport 中不存在或解析失败（不阻塞主流程）。每个字段的解析独立，
@@ -168,6 +180,9 @@ func (pd *ParsedData) analysisResults() AnalysisResults {
 			r.FileName = resp.FileName
 			r.CriticalError = resp.CriticalError
 			r.Note = resp.Note
+			// P3-C 时间窗：留存逐段序列 + 容量，供窗口化重算。
+			r.LevelSummaries = resp.LevelSummaries
+			r.DeviceCapacityMah = resp.DeviceCapacity
 			// P3-B: capture the Historian plot HTML (empty unless chart generation was enabled).
 			r.PlotHTML = string(data.Historian)
 			if len(resp.AppStats) > 0 {

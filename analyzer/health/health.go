@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/reedhoop/ai-battery-historian/aggregated"
+	"github.com/reedhoop/ai-battery-historian/parseutils"
 	"github.com/reedhoop/ai-battery-historian/presenter"
 )
 
@@ -70,6 +71,17 @@ type Report struct {
 	// dimensions is not mistaken for a full 100-point evaluation.
 	Evaluated int `json:"evaluated"`
 	Total     int `json:"total"`
+
+	// Window metadata. IsWindow is true when this Report was produced by
+	// EvaluateWindow over a sub-span (not the whole report). WindowStartMs/
+	// WindowEndMs are the selected range (unix ms). WindowableKeys lists
+	// the dimensions that were actually re-scored over the window; the rest
+	// (stability / modem) carry their WHOLE-REPORT value and are flagged as
+	// frozen in their Detail so the card can show them as "全程值".
+	IsWindow      bool   `json:"isWindow"`
+	WindowStartMs int64  `json:"windowStartMs"`
+	WindowEndMs   int64  `json:"windowEndMs"`
+	WindowableKeys []string `json:"windowableKeys"`
 }
 
 // Weights for the 6 dimensions. They sum to 1.0.
@@ -148,6 +160,258 @@ func Evaluate(c aggregated.Checkin, h presenter.HistogramStats) *Report {
 		Evaluated:   evaluated,
 		Total:       total,
 	}
+}
+
+// EvaluateWindow re-scores battery health over a user-selected time span
+// [fromMs, toMs] (unix ms) instead of the whole report. It re-aggregates
+// the per-segment (battery-level-drop) series (parseutils.ActivitySummary)
+// that the analyzer already retains, so a brief anomaly — a 10-minute
+// wakelock storm, a short deep-discharge burst — is no longer diluted
+// into the long whole-report average.
+//
+// Only 4 of the 6 dimensions can be scored precisely from the
+// time-indexed series:
+//   - standby discharge rate  (level drop during screen-off)
+//   - wakelock burden         (held wakelock time)
+//   - wakeup/sync frequency    (TotalSyncSummary count)
+//   - doze adoption           (IdleModeSummary duration)
+// The other 2 — app stability (ANR/crash) and modem discharge rate —
+// only exist as whole-report totals (no per-timestamp breakdown in the
+// series), so under the strict policy they are carried FROZEN from the
+// full-report Report and shown as "全程值", excluded from the window
+// composite. This avoids fabricating numbers for metrics we cannot window.
+//
+// capacityMah is accepted for API symmetry (a future mAh-based standby
+// score) but the current %/h computation does not require it.
+func EvaluateWindow(summaries []parseutils.ActivitySummary, capacityMah float32, fromMs, toMs int64, full *Report) *Report {
+	if fromMs > toMs {
+		fromMs, toMs = toMs, fromMs
+	}
+
+		var realtimeMs, screenOffMs, screenOffDischargePct, longWakelockMs, idleMs, totalSyncNum int64
+	// nsToMs converts a duration expressed in nanoseconds (time.Duration, as
+	// stored in parseutils.Dist) into milliseconds, so it can be combined with
+	// the millisecond-based segment boundaries (StartTimeMs/EndTimeMs).
+	const nsToMs = int64(time.Millisecond)
+	for i := range summaries {
+		s := summaries[i]
+		segStart, segEnd := s.StartTimeMs, s.EndTimeMs
+		// Segment does not overlap the selected window.
+		if segEnd < fromMs || segStart > toMs {
+			continue
+		}
+		clampStart := segStart
+		if clampStart < fromMs {
+			clampStart = fromMs
+		}
+		clampEnd := segEnd
+		if clampEnd > toMs {
+			clampEnd = toMs
+		}
+		segDur := segEnd - segStart
+		clampDur := clampEnd - clampStart
+		if segDur <= 0 || clampDur <= 0 {
+			continue
+		}
+		// Skip charging segments (plugged-in): discharge-based health does
+		// not apply while the battery is charging.
+		pluggedMs := distDurationInWindow(s.PluggedInSummary, segStart, segEnd, clampStart, clampEnd) / nsToMs
+		if pluggedMs*2 >= clampDur {
+			continue
+		}
+		realtimeMs += clampDur
+
+		// Screen-off time within the clamped segment (ms).
+		screenOnMs := distDurationInWindow(s.ScreenOnSummary, segStart, segEnd, clampStart, clampEnd) / nsToMs
+		screenOffMs += clampDur - screenOnMs
+
+		// Discharge attributable to screen-off time (the standby rate is
+		// specifically the screen-OFF discharge). offFrac scales the
+		// segment's level drop to its screen-off portion.
+		drop := int64(s.InitialBatteryLevel - s.FinalBatteryLevel)
+		if drop > 0 {
+			offFrac := float64(clampDur-screenOnMs) / float64(segDur)
+			screenOffDischargePct += int64(float64(drop)*offFrac + 0.5)
+		}
+		// Wakelock burden (held wakelock time) — proxy via Long Wakelocks.
+		longWakelockMs += sumDistMapDurationInWindow(s.LongWakelockSummary, segStart, segEnd, clampStart, clampEnd) / nsToMs
+		// Doze / idle adoption.
+		idleMs += sumDistMapDurationInWindow(s.IdleModeSummary, segStart, segEnd, clampStart, clampEnd) / nsToMs
+		// Wakeup/sync frequency.
+		totalSyncNum += distNumInWindow(s.TotalSyncSummary, segStart, segEnd, clampStart, clampEnd)
+	}
+
+	// Build a synthetic aggregated.Checkin carrying ONLY the fields the 4
+	// windowable dimension functions read.
+	var synth aggregated.Checkin
+	synth.Realtime = time.Duration(realtimeMs) * time.Millisecond
+	synth.ScreenOffRealtime = time.Duration(screenOffMs) * time.Millisecond
+	if screenOffMs > 0 {
+		// Discharge rate in %/h = (discharge %) / (screen-off hours).
+		// Computed directly (not via the batterystats 3600*1000*pts quirk)
+		// so the units match the dimension thresholds exactly.
+		hours := float64(screenOffMs) / 3600000.0
+		synth.ScreenOffDischargeRatePerHr = aggregated.MFloat32{
+			V: float32(float64(screenOffDischargePct) / hours),
+		}
+	}
+	if realtimeMs > 0 {
+		// Wakelock burden (% of realtime held awake). The series only
+		// exposes held wakelock time (Long Wakelocks), so we use it as
+		// the partial-wakelock proxy; full-wakelock is left 0.
+		synth.PartialWakelockTimePercentage = float32(float64(longWakelockMs) / float64(realtimeMs) * 100.0)
+	}
+
+	var synthHist presenter.HistogramStats
+	if realtimeMs > 0 {
+		hours := float64(realtimeMs) / 3600000.0
+		if hours > 0 {
+			synthHist.TotalAppWakeupsPerHr = float32(float64(totalSyncNum) / hours)
+		}
+		synthHist.DeviceIdleModeEnabledTimePercentage = float32(float64(idleMs) / float64(realtimeMs) * 100.0)
+	}
+
+	dims := []Dimension{
+		standbyDimension(synth),
+		wakelockDimension(synth),
+		wakeupDimension(synthHist),
+		dozeDimension(synthHist),
+	}
+
+	// Windowable dimension keys (the 4 re-scored over the window).
+	windowable := map[string]bool{
+		"standby_drain":      true,
+		"wakelock_burden":  true,
+		"wakeup_sync_freq":  true,
+		"doze_adoption":     true,
+	}
+
+	// Composite over the windowable, valid dimensions only; their
+	// weights (0.30+0.20+0.15+0.10 = 0.75) renormalize to 1.0.
+	var weightSum, scoreSum float64
+	evaluated, total := 0, len(dims)
+
+	// No time (and thus no data) falls inside the selected window: report
+	// N/A rather than a misleading all-zero "F".
+	if realtimeMs == 0 {
+		return &Report{
+			Score:        0,
+			Grade:        "N/A",
+			Summary:      "所选时间段内无运行数据，无法评估健康度。",
+			Dimensions:   dims,
+			Alerts:       nil,
+			GeneratedAt:  time.Now(),
+			Evaluated:    0,
+			Total:        total,
+			IsWindow:     true,
+			WindowStartMs: fromMs,
+			WindowEndMs:   toMs,
+			WindowableKeys: nil,
+		}
+	}
+
+	var windowableKeys []string
+	for _, d := range dims {
+		if windowable[d.Key] {
+			if d.Valid && isFinite(d.Score) {
+				weightSum += d.Weight
+				scoreSum += d.Score * d.Weight
+				evaluated++
+				windowableKeys = append(windowableKeys, d.Key)
+			}
+		}
+	}
+
+	// Carry stability + modem FROZEN from the full-report (they have no
+	// per-timestamp series). Marked "全程值" so they are shown for
+	// reference but excluded from the window composite above.
+	if full != nil {
+		for _, fd := range full.Dimensions {
+			if fd.Key == "app_stability" || fd.Key == "modem_activity" {
+				frozen := fd
+				frozen.Detail = fd.Detail + "（全程值）"
+				frozen.Weight = 0
+				dims = append(dims, frozen)
+			}
+		}
+		total = 6
+	}
+
+	if weightSum == 0 {
+		return &Report{
+			Score:        0,
+			Grade:        "N/A",
+			Summary:      "所选时间段内无可评分的窗口化维度（无灭屏放电、wakelock、doze 或 wakeup 数据）。",
+			Dimensions:   dims,
+			Alerts:       nil,
+			GeneratedAt:  time.Now(),
+			Evaluated:    evaluated,
+			Total:        total,
+			IsWindow:     true,
+			WindowStartMs: fromMs,
+			WindowEndMs:   toMs,
+			WindowableKeys: windowableKeys,
+		}
+	}
+
+	composite := scoreSum / weightSum
+	if !isFinite(composite) {
+		composite = 0
+	}
+	alerts := buildAlerts(dims)
+	grade := gradeOf(composite)
+	return &Report{
+		Score:        composite,
+		Grade:        grade,
+		Summary:      summarize(composite, grade, dims),
+		Dimensions:   dims,
+		Alerts:       alerts,
+		GeneratedAt:   time.Now(),
+		Evaluated:    evaluated,
+		Total:        total,
+		IsWindow:     true,
+		WindowStartMs: fromMs,
+		WindowEndMs:   toMs,
+		WindowableKeys: windowableKeys,
+	}
+}
+
+// distDurationInWindow scales a Dist's duration to the portion of its
+// segment [segStart,segEnd] that falls inside [winStart,winEnd], assuming
+// the event time was uniformly spread across the segment.
+func distDurationInWindow(d parseutils.Dist, segStart, segEnd, winStart, winEnd int64) int64 {
+	segDur := segEnd - segStart
+	if segDur <= 0 {
+		return 0
+	}
+	clampDur := winEnd - winStart
+	if clampDur <= 0 {
+		return 0
+	}
+	return int64(float64(d.TotalDuration) * float64(clampDur) / float64(segDur))
+}
+
+// distNumInWindow scales a Dist's count the same way.
+func distNumInWindow(d parseutils.Dist, segStart, segEnd, winStart, winEnd int64) int64 {
+	segDur := segEnd - segStart
+	if segDur <= 0 {
+		return 0
+	}
+	clampDur := winEnd - winStart
+	if clampDur <= 0 {
+		return 0
+	}
+	return int64(float64(d.Num) * float64(clampDur) / float64(segDur))
+}
+
+// sumDistMapDurationInWindow sums the clamped durations of every entry in a
+// Dist map (e.g. LongWakelockSummary keyed by wakelock name).
+func sumDistMapDurationInWindow(m map[string]parseutils.Dist, segStart, segEnd, winStart, winEnd int64) int64 {
+	var total int64
+	for _, d := range m {
+		total += distDurationInWindow(d, segStart, segEnd, winStart, winEnd)
+	}
+	return total
 }
 
 // statusOf maps a 0-100 score to a qualitative status, using the same
