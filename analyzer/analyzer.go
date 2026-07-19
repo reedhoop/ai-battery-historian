@@ -1039,8 +1039,8 @@ func analyze(bugReport string, pkgs []*usagepb.PackageInfo) summariesData {
 	var bufTotal, bufLevel bytes.Buffer
 	// repTotal contains summaries over discharge intervals
 	repTotal := parseutils.AnalyzeHistory(&bufTotal, bugReport, parseutils.FormatTotalTime, upm, false)
-	// repLevel contains summaries for each battery level drop.
-	// The generated errors would be the exact same as repTotal.Errs so no need to track or add them again.
+	// bufLevel holds the per-battery-level-drop summaries (FormatBatteryLevel).
+	// Its generated errors are identical to repTotal.Errs, so they are not tracked again here.
 	parseutils.AnalyzeHistory(&bufLevel, bugReport, parseutils.FormatBatteryLevel, upm, false)
 
 	// Exclude summaries with no change in battery level
