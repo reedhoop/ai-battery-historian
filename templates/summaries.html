@@ -43,6 +43,11 @@ specific language governing permissions and limitations under the License.
     </div>
   </div>
   <div class="col-xs-12">
+    {{if .Health}}
+      {{template "health_card" .Health}}
+    {{end}}
+  </div>
+  <div class="col-xs-12">
     <div id="panel-historian" class="panel panel-default panel-tabs collapse in">
       <div class="panel-heading">
         <ul class="nav nav-tabs">

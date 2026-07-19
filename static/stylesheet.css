@@ -392,3 +392,44 @@ pre {
   width: 1px;
   white-space: nowrap;
 }
+
+/* ---------- 电池健康度卡片 (WebUI ③) ---------- */
+.health-head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.health-score {
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1;
+}
+.health-score-meta {
+  font-size: 13px;
+  color: #666;
+}
+.health-grade-text {
+  font-weight: 600;
+}
+.health-grade {
+  margin-left: 8px;
+  font-size: 13px;
+  vertical-align: middle;
+}
+.health-summary {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #444;
+}
+.health-dims {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+.health-dims td,
+.health-dims th {
+  font-size: 13px;
+}
+.health-dim-detail {
+  color: #777;
+  font-size: 12px;
+}

@@ -42,6 +42,7 @@ import (
 	"github.com/reedhoop/ai-battery-historian/checkinparse"
 	"github.com/reedhoop/ai-battery-historian/checkinutil"
 	"github.com/reedhoop/ai-battery-historian/dmesg"
+	"github.com/reedhoop/ai-battery-historian/analyzer/health"
 	"github.com/reedhoop/ai-battery-historian/historianutils"
 	"github.com/reedhoop/ai-battery-historian/kernel"
 	"github.com/reedhoop/ai-battery-historian/packageutils"
@@ -386,6 +387,7 @@ func InitTemplates(dir string) {
 	resultTempl = constructTemplate(dir, []string{
 		"body.html",
 		"summaries.html",
+		"health_card.html",
 		"historian_v2.html",
 		"checkin.html",
 		"history.html",
@@ -662,6 +664,38 @@ func extractHistogramStats(data presenter.HTMLData) presenter.HistogramStats {
 		BluetoothState:                      data.CheckinSummary.BluetoothState,
 		DataConnection:                      data.CheckinSummary.DataConnection,
 	}
+}
+
+// toHealthReport copies an analyzer/health.Report into the presentational
+// presenter.HealthReport. It lives in the analyzer package (which imports
+// both) so presenter can stay free of the health import and avoid a cycle.
+func toHealthReport(hr *health.Report) *presenter.HealthReport {
+	if hr == nil {
+		return nil
+	}
+	out := &presenter.HealthReport{
+		Score:       hr.Score,
+		Grade:       hr.Grade,
+		Summary:     hr.Summary,
+		GeneratedAt: hr.GeneratedAt.Format(time.RFC3339),
+	}
+	for _, d := range hr.Dimensions {
+		out.Dimensions = append(out.Dimensions, presenter.HealthDimension{
+			Label:  d.Label,
+			Score:  d.Score,
+			Status: d.Status,
+			Detail: d.Detail,
+		})
+	}
+	for _, a := range hr.Alerts {
+		out.Alerts = append(out.Alerts, presenter.HealthAlert{
+			Level:   a.Level,
+			Category: a.Category,
+			Message: a.Message,
+			Value:    a.Value,
+		})
+	}
+	return out
 }
 
 // writeTempFile writes the contents to a temporary file.
@@ -987,6 +1021,14 @@ func (pd *ParsedData) parseBugReport(fnameA, contentsA, fnameB, contentsB string
 			OverflowMs:      summariesOutput.overflowMs,
 			IsDiff:          diff,
 		})
+		// P3-C / WebUI ③: 把电池健康度评分接入结果页卡片。
+		// 复用 health.Evaluate（与 analysisResults 中给 MCP 用的是同一纯函数），
+		// 避免循环依赖：health 已 import presenter，故此处只拷贝成 presenter.HealthReport。
+		if ce == "" {
+			if hr := health.Evaluate(data.CheckinSummary, extractHistogramStats(data)); hr != nil {
+				data.Health = toHealthReport(hr)
+			}
+		}
 		pd.data = append(pd.data, data)
 
 		if diff {

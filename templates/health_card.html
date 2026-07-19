@@ -1,0 +1,57 @@
+<!--
+Copyright 2016 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+{{define "health_card"}}
+<div id="panel-health" class="panel panel-default collapse in">
+  <div class="panel-heading">
+    <span>电池健康度</span>
+    <span class="label label-default health-grade">等级 {{.Grade}}</span>
+    <span id="toggle-health"
+          class="glyphicon glyphicon-remove btn btn-default btn-right btn-xxs"
+          data-toggle="collapse" data-target="#panel-health">
+    </span>
+  </div>
+  <div class="panel-body">
+    <div class="health-head">
+      <div class="health-score">{{printf "%.0f" .Score}}</div>
+      <div class="health-score-meta">
+        <div>综合评分 / 100</div>
+        <div class="health-grade-text">等级 {{.Grade}}</div>
+      </div>
+    </div>
+    {{if .Summary}}<div class="health-summary">{{.Summary}}</div>{{end}}
+    {{range .Alerts}}
+    <div class="alert {{if eq .Level "critical"}}alert-danger{{else if eq .Level "warning"}}alert-warning{{else}}alert-info{{end}}">
+      <strong>{{.Category}}</strong>：{{.Message}}{{if .Value}} ({{.Value}}){{end}}
+    </div>
+    {{end}}
+    {{if .Dimensions}}
+    <table class="table table-condensed health-dims">
+      <thead><tr><th>维度</th><th>评分</th><th>状态</th><th>说明</th></tr></thead>
+      <tbody>
+        {{range .Dimensions}}
+        <tr>
+          <td>{{.Label}}</td>
+          <td>{{if eq .Status "n/a"}}N/A{{else}}{{printf "%.0f" .Score}}{{end}}</td>
+          <td><span class="label {{if eq .Status "good"}}label-success{{else if eq .Status "fair"}}label-warning{{else if eq .Status "poor"}}label-danger{{else}}label-default{{end}}">{{.Status}}</span></td>
+          <td class="health-dim-detail">{{.Detail}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{end}}
+  </div>
+</div>
+{{end}}

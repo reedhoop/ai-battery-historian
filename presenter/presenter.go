@@ -80,6 +80,43 @@ type HTMLData struct {
 	AppStats               []AppStat
 	Overflow               bool
 	HasBatteryStatsHistory bool
+
+	// Health is the battery-health dashboard card (P3-C / WebUI ③).
+	// It is a self-contained snapshot copied from analyzer/health.Report.
+	// IMPORTANT: presenter must NOT import analyzer/health (health already
+	// imports presenter → would be a cycle), so this is a plain duplicate
+	// struct and the analyzer package does the field copy.
+	// Nil when the report could not be scored (e.g. unsupported version
+	// or a critical parse error).
+	Health *HealthReport
+}
+
+// HealthReport is the presentational snapshot of a battery-health score,
+// copied from analyzer/health.Report so web templates can render it without
+// pulling in the health package.
+type HealthReport struct {
+	Score       float64
+	Grade       string
+	Summary     string
+	Dimensions  []HealthDimension
+	Alerts      []HealthAlert
+	GeneratedAt  string // RFC3339, for display
+}
+
+// HealthDimension is one scored aspect of battery behavior.
+type HealthDimension struct {
+	Label  string
+	Score  float64
+	Status string // good / fair / poor / n/a
+	Detail string
+}
+
+// HealthAlert is a single actionable finding.
+type HealthAlert struct {
+	Level   string // info / warning / critical
+	Category string
+	Message string
+	Value    string
 }
 
 // CombinedCheckinSummary is the combined structure for the 2 files being compared

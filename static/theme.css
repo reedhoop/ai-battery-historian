@@ -241,3 +241,23 @@ img, svg, canvas { max-width: 100%; }
   .historian-note { font-size: 0.9em; }
   .navbar-toggle-theme { margin-top: 10px; }
 }
+
+/* ---------- 健康度卡片暗色配色 + Bootstrap alert/label ---------- */
+[data-theme="dark"] .health-score-meta,
+[data-theme="dark"] .health-summary { color: var(--bh-text-muted); }
+[data-theme="dark"] .health-dim-detail { color: #888; }
+[data-theme="dark"] .health-grade { background-color: #444; }
+[data-theme="dark"] .label-default { background-color: #555; }
+[data-theme="dark"] .label-success { background-color: #2e7d32; }
+[data-theme="dark"] .label-warning { background-color: #f57f17; }
+[data-theme="dark"] .label-danger { background-color: #c62828; }
+[data-theme="dark"] .alert { color: var(--bh-text); }
+[data-theme="dark"] .alert-danger {
+  background-color: #3a1f1f; border-color: #e53935; color: #ffb3b3;
+}
+[data-theme="dark"] .alert-warning {
+  background-color: #3a3115; border-color: #fbc02d; color: #ffe08a;
+}
+[data-theme="dark"] .alert-info {
+  background-color: #15293a; border-color: #1e88e5; color: #a9d3ff;
+}
