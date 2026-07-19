@@ -1,4 +1,4 @@
-﻿// Copyright 2016 Google Inc. All Rights Reserved.
+// Copyright 2016 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -734,6 +734,12 @@ type DeviceState struct {
 	BatteryLevel  tsInt
 	Brightness    tsInt
 	CoulombCharge tsInt
+	// ModemRailCharge / WifiRailCharge 是 Android 17 新增的 history key
+	// Mrc/Wrc，分别记录 modem 和 wifi 轨道累计耗电（mAh，浮点）。
+	// 由于历史行里值以整数 mAh 形式出现（AOSP 用 DecimalFormat("#.##") 格式化），
+	// 用 tsInt 存储，时间轴展示耗电曲线。
+	ModemRailCharge tsInt
+	WifiRailCharge  tsInt
 
 	PhoneState          tsString
 	DataConnection      tsString // hspa, hspap, lte
@@ -767,6 +773,9 @@ type DeviceState struct {
 	WakeLockHeld    tsBool
 	FlashlightOn    tsBool
 	ChargingOn      tsBool
+	// UsbDataLink 是 Android 17 新增 STATE2 flag (1<<18)，checkin 短名 Ud。
+	// 标识 USB 数据链路是否处于激活状态（USB 数据传输中）。
+	UsbDataLink tsBool
 	CameraOn        tsBool
 	VideoOn         tsBool
 	AudioOn         tsBool
@@ -829,6 +838,8 @@ func (state *DeviceState) initStartTimeForAllStates() {
 	state.BatteryLevel.initStart(state.CurrentTime)
 	state.Brightness.initStart(state.CurrentTime)
 	state.CoulombCharge.initStart(state.CurrentTime)
+	state.ModemRailCharge.initStart(state.CurrentTime)
+	state.WifiRailCharge.initStart(state.CurrentTime)
 	state.PhoneSignalStrength.initStart(state.CurrentTime)
 	state.PhoneState.initStart(state.CurrentTime)
 	state.DataConnection.initStart(state.CurrentTime)
@@ -861,6 +872,7 @@ func (state *DeviceState) initStartTimeForAllStates() {
 	state.IdleMode.initStart(state.CurrentTime)
 	state.FlashlightOn.initStart(state.CurrentTime)
 	state.ChargingOn.initStart(state.CurrentTime)
+	state.UsbDataLink.initStart(state.CurrentTime)
 	state.WifiSuppl.initStart(state.CurrentTime)
 	state.WifiSignalStrength.initStart(state.CurrentTime)
 	state.DcpuStats.initStart(state.CurrentTime)
@@ -970,6 +982,8 @@ type ActivitySummary struct {
 	LowPowerModeOnSummary Dist
 	FlashlightOnSummary   Dist
 	ChargingOnSummary     Dist
+	// Android 17 新增 Ud 状态的 summary。
+	UsbDataLinkSummary   Dist
 
 	PhoneCallSummary Dist
 	PhoneScanSummary Dist
@@ -1202,6 +1216,9 @@ func concludeActiveFromState(state *DeviceState, summary *ActivitySummary) (*Dev
 	// Charging: ch
 	state.ChargingOn.updateSummary(state.CurrentTime, summary.Active, summary.StartTimeMs, &summary.ChargingOnSummary)
 
+	// USB Data Link: Ud (Android 17 新增)
+	state.UsbDataLink.updateSummary(state.CurrentTime, summary.Active, summary.StartTimeMs, &summary.UsbDataLinkSummary)
+
 	//////////////// String States ////////////
 
 	// Phone state: Pst
@@ -1433,6 +1450,9 @@ func (s *ActivitySummary) Print(b io.Writer) {
 
 	fmt.Fprintf(b, "%30s", "ChargingOn:")
 	s.ChargingOnSummary.print(b, duration)
+
+	fmt.Fprintf(b, "%30s", "UsbDataLink:")
+	s.UsbDataLinkSummary.print(b, duration)
 
 	printMap(b, "IdleMode", s.IdleModeSummary, duration)
 	printMap(b, "DataConnectionSummary", s.DataConnectionSummary, duration)
@@ -1769,6 +1789,12 @@ func updateState(b io.Writer, csvState *csv.State, state *DeviceState, summary *
 
 	case "Bcc": // coulomb charge (in mAh)
 		return state, summary, state.CoulombCharge.assign(state.CurrentTime, value, summary.Active, "Coulomb charge", csvState)
+
+	case "Mrc": // modem rail charge (in mAh, Android 17 新增)
+		return state, summary, state.ModemRailCharge.assign(state.CurrentTime, value, summary.Active, "Modem rail charge", csvState)
+
+	case "Wrc": // wifi rail charge (in mAh, Android 17 新增)
+		return state, summary, state.WifiRailCharge.assign(state.CurrentTime, value, summary.Active, "Wifi rail charge", csvState)
 
 	case "r": // running
 		// Needs special handling as the wakeup reason will arrive asynchronously
@@ -2479,6 +2505,12 @@ func updateState(b io.Writer, csvState *csv.State, state *DeviceState, summary *
 			summary.Active, summary.StartTimeMs,
 			&summary.ChargingOnSummary, tr, Charging, csvState)
 
+	case "Ud": // usb_data (Android 17 新增 STATE2 flag, +/- 形式)
+		// Ud 标识 USB 数据链路是否处于激活状态（USB 数据传输中）。
+		return state, summary, state.UsbDataLink.assign(state.CurrentTime,
+			summary.Active, summary.StartTimeMs,
+			&summary.UsbDataLinkSummary, tr, "USB data link", csvState)
+
 	case "Epi": // pkginst: package being installed, regardless of whether an older version of
 		return state, summary, addCSVInstantAppEvent(csvState, state, idxMap, "Package install", value)
 
@@ -2488,6 +2520,11 @@ func updateState(b io.Writer, csvState *csv.State, state *DeviceState, summary *
 	case "Esm": // significant motion
 		// Significant Motion Detection is a state change event that is added to CSV as a point event without a duration.
 		addCSVInstantEvent(csvState, state, "Significant motion", "bool", "true")
+		return state, summary, nil
+
+	case "Eds": // display_state_changed (Android 17 新增 EVENT_DISPLAY_STATE_CHANGED=0x16)
+		// value 为 display state 整数（如 0/1/2/3/4），记录屏幕显示状态变化点。
+		addCSVInstantEvent(csvState, state, "Display state changed", "int", value)
 		return state, summary, nil
 
 	case "Ewa": // wakeup AP: a UID caused the application processor to wakeup.
@@ -2528,6 +2565,11 @@ func updateState(b io.Writer, csvState *csv.State, state *DeviceState, summary *
 		if _, ok := idxMap[value]; !ok {
 			return state, summary, fmt.Errorf("unable to find index %q in idxMap for collect external stats event (Est)", value)
 		}
+		return state, summary, nil
+
+	case "Esc": // state change (Android 17 新增 EVENT_STATE_CHANGE=0x15)
+		// Esc 与 sync/audio 事件重复出现（如 +s,+Esc=88），无独立语义，
+		// value 是关联状态标识。no-op 处理避免污染日志。
 		return state, summary, nil
 
 	// Not yet implemented in the framework
@@ -3024,6 +3066,7 @@ var levelSummaryDimensions = []levelSummaryDimension{
 	{"LowPowerModeOn", "LowPowerModeOnSummary", true},
 	{"FlashlightOn", "FlashlightOnSummary", true},
 	{"ChargingOn", "ChargingOnSummary", true},
+	{"UsbDataLink", "UsbDataLinkSummary", true},
 
 	{"PhoneCall", "PhoneCallSummary", true},
 	{"PhoneScan", "PhoneScanSummary", true},

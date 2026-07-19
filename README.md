@@ -91,7 +91,9 @@ $ ./battery-historian --port 9999
 
 本 fork 修复了 checkin version 36（Android 11+）bugreport 解析问题：原版 `parseControllerData` 严格按整数解析，遇到浮点格式整数字段（如 `0.0`）会失败，导致 "Could not parse aggregated battery stats" 错误。本 fork 改为「先尝试整数转换，失败再按 float 解析后转 int64」，可正确解析 2026 年新版 Android bugreport。
 
-> 已知遗留：少量新 history key（如 `Mrc` / `Esc` / `Chtp`）仍会打印 "Unknown history key" 警告，但不影响主流程解析与时间轴绘制。
+> Android 17 新增 history key 兼容：`Mrc`（modem rail charge）、`Wrc`（wifi rail charge）、`Ud`（USB data link）、`Eds`（display state changed）、`Esc`（state change）均已支持，不再打印 "Unknown history key" 警告。
+>
+> 已知遗留：`Chtp`（charging type）仍会打印 "Unknown history key" 警告，但不影响主流程解析与时间轴绘制。
 
 
 #### How to take a bug report
