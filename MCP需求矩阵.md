@@ -4,7 +4,13 @@
 > 目标：让 AI 助手（Claude / WorkBuddy / Cursor 等）通过 MCP 协议直接解析 Android bugreport、做耗电根因分析与 A/B 对比。
 > 编号规则：FR = 功能需求，NFR = 非功能/工程需求。阶段：P1=独立包裹 Demo（Form A），P2=原生嵌入（Form B），P3=增强。
 
-> **实施状态（2026-07-19 校准）**：FR-01..FR-16 + NFR-01..NFR-06 均已交付（除 P3-A Python 3 迁移未做）。FR-17/18/19 为 P3-B/C 新增需求，亦已交付。下表"实施状态"列反映 Form A（`mcp-server/`，v0.1.0）/ Form B（`cmd/battery-historian --mcp`，v0.2.0）的实际落地情况。**import 路径 bug 已修复**：6 个误用 `github.com/google/battery-historian/...` 旧路径的文件已批量替换为 `github.com/reedhoop/ai-battery-historian/...`，`go build ./...` / `go vet ./analyzer/... ./cmd/battery-historian/...` / `go test ./analyzer/...` 全部通过。同步完成 code review 发现的 P0/P1 安全加固 + P2/P3 健康度优化（详见 §六.3）。
+> **实施状态（2026-07-19 校准）**：FR-01..FR-16 + NFR-01..NFR-06 均已交付（除 P3-A Python 3 迁移未做）。FR-17/18/19 为 P3-B/C 新增需求，亦已交付。下表"实施状态"列反映 Form A（`mcp-server/`，v0.1.0）/ Form B（`cmd/battery-historian --mcp`，v0.2.0）的实际落地情况。**import 路径 bug 已修复**：6 个误用 `github.com/google/battery-historian/...` 旧路径的文件已批量替换为 `github.com/reedhoop/ai-battery-historian/...`，`go build ./...` / `go vet ./analyzer/... ./cmd/battery-historian/...` / `go test ./analyzer/...` 全部通过。同步完成 code review 发现的 P0/P1 安全加固（详见 §六.3）；P2/P3 健康度优化随该功能于 commit `8a271c6` 移除而不再适用。
+
+---
+
+## ⚠️ 功能移除声明（2026-07-19）
+
+> 自定义电池**健康度评分**功能（原 P3-C）已于 commit `8a271c6` 整体移除：含 `analyzer/health` 包、`query_health` tool、`bugreport://{id}/health` resource、`battery_health_report` prompt、`cmd/healthcheck` CLI 与结果页健康度卡片。用户认为其对问题分析实际意义不大。**原生 batterystats `HistogramStats`（FR-05 `query_histogram`，即「健康度直方图」）、System Health 可视化 tab、`metrics.js` 的 `HEALTH` metric 均保留不受影响。** 本文档凡标注「P3-C 健康度 / query_health / health resource / battery_health_report / AnalysisResult.Health / analyzer/health」之处，均指向**已移除**代码，仅作历史归档，请勿据此对接。
 
 ---
 
@@ -40,7 +46,7 @@
 | FR-16 | SDK 版本守卫 | 功能 | 所有解析类 Tool | `minSupportedSDK=21` (`analyzer.go:62`)；`criticalError` 字段 | P1 | P1 | 0.25d | ✅ A+B |
 | FR-17 | 以 Resource 暴露图表 HTML（P3-B） | 功能 | Resource `bugreport://{id}/chart` | `AnalysisResult.PlotHTML`（`generateV2ChartSVG` `chart_v2.go:119` fallback，或 `AnalyzeWithChart` 走 Python） | P2 | P3-B | 0.5d | ✅ B only |
 | FR-18 | 以 Resource 暴露分析报告页（P3-B） | 功能 | Resource `bugreport://{id}/report` | `AnalysisResult.ReportHTML`（`generateReportHTML` `chart_v2.go:301`） | P2 | P3-B | 0.5d | ✅ B only |
-| FR-19 | 健康度评分查询（P3-C） | 功能 | Tool `query_health(id)` + Resource `bugreport://{id}/health` + Prompt `battery_health_report` | `AnalysisResult.Health`（`health.Evaluate` `analyzer/health/health.go:81`，6 维度加权） | P2 | P3-C | 1d | ✅ B only |
+| FR-19 | 健康度评分查询（P3-C） | 功能 | Tool `query_health(id)` + Resource `bugreport://{id}/health` + Prompt `battery_health_report` | `AnalysisResult.Health`（`health.Evaluate` `analyzer/health/health.go:81`，6 维度加权） | P2 | P3-C | 1d | ❌ 已移除（commit `8a271c6`） |
 | FR-20 | 查询 dumpsys power 段（实时 wakelock 快照） | 功能 | Tool `query_power(id, report_index?)` | `AnalysisResult.PowerSummary`（`power.Parse` `analyzer/power/power.go`，`bugreportutils.ExtractServiceDump(raw,"power")`） | P1 | P4 | 0.5d | ✅ B only |
 | FR-21 | 查询 dumpsys alarm 段（定时唤醒源） | 功能 | Tool `query_alarms(id, report_index?, topN?)` | `AnalysisResult.AlarmSummary`（`alarm.Parse` `analyzer/alarm/alarm.go`，Top-N 按 repeatInterval 降序） | P1 | P4 | 0.5d | ✅ B only |
 | FR-22 | 查询 dumpsys activity 段（ANR/LMK/exits/running） | 功能 | Tool `query_activity(id, report_index?, kind?:anr\|lmk\|exits\|running\|all)` | `AnalysisResult.ActivityStats`（`dumpsysactivity.Parse` `analyzer/dumpsysactivity/activity.go`，`ActivitySubsectionRE` 切子段） | P1 | P4 | 0.75d | ✅ B only |
@@ -76,7 +82,7 @@
 
 ### P3 · 增强（部分完成）
 - **P3-B 图表 fallback ✅ 已完成**：`analyzer/chart_v2.go` 用纯 Go `generateV2ChartSVG` 替代 Python 图表，作为 `bugreport://{id}/chart` resource；`generateReportHTML` 生成自包含分析报告页作为 `bugreport://{id}/report` resource。仅适用 Format:2 报告。对应 FR-17/18。
-- **P3-C 健康度评分 ✅ 已完成**：`analyzer/health/health.go` 落地 6 维度加权评分，通过 `query_health` tool + `bugreport://{id}/health` resource + `battery_health_report` prompt 暴露。对应 FR-19。
+- **P3-C 健康度评分 ❌ 已移除（commit `8a271c6`）**：原 `analyzer/health/health.go` 落地 6 维度加权评分，通过 `query_health` tool + `bugreport://{id}/health` resource + `battery_health_report` prompt 暴露（**现已整体删除**，对应 FR-19 失效）。
 - **P3-A Python 3 迁移 ⏸ 未做**：P3-B 的 SVG fallback 已能满足 Format:2 报告需求；legacy Format:1 报告若需 Historian 风格图表仍需 `--mcp_with_chart` + Python 3 + 已迁移的 `scripts/historian.py`。
 
 ### P4 · OEM 功耗分析扩展 ✅ 已完成（Form B）
@@ -97,17 +103,16 @@
 | Python 2.7 仅用于画图 | NFR-02 | Form A 走 `parseBugReport` 仍触发 `doHistorian`（Python 缺失时仅该 goroutine 报错，结构化数据正常）；Form B `ParsedData.skipPlot=true` 完全不调 Python；P3-B 用纯 Go SVG fallback | ✅ 已绕开 |
 | `golang/protobuf` ↔ `google.golang.org/protobuf` 共存 | NFR-03 | `golang/protobuf v1.3.5` 已是 wrapper；引入 mcp-go v0.56.0 后实测编译通过 | ✅ 已解决 |
 | **~~P3-B/P3-C 新增文件 import 路径 bug~~** | NFR-01/02/03 | ~~6 个文件误用 `github.com/google/battery-historian/...` 旧路径~~ 已批量替换为 `github.com/reedhoop/ai-battery-historian/...` | ✅ 已解决 |
-| **【Code Review 修复，2026-07-19】P0/P1 安全 + P2/P3 健康度** | NFR-04 + FR-06/07/10/11 + FR-19 | 详见 §六.3 修订记录（14 项优化全部修复） | ✅ 已解决 |
+| **【Code Review 修复，2026-07-19】P0/P1 安全加固** | NFR-04 + FR-06/07/10/11（FR-19 健康度评分已随 commit `8a271c6` 移除） | 详见 §六.3 修订记录（P0/P1 安全加固全部修复；P2/P3 健康度优化因功能移除不再适用） | ✅ 已解决 |
 | 解析重 IO/同步、结果大 | FR-14、FR-15 | Form A HTTP 超时 5 分钟 + Top-N 默认返回 + 大数据走 Resource | ✅ 已落实 |
 | 低版本报告数据有限 | FR-16 | 显式返回 `criticalError`，不静默空结果 | ✅ 已落实 |
 
-**曾经受 import 路径 bug 影响的 6 个文件**（已全部修复）：
-- `analyzer/core.go`（import aggregated / analyzer/health / pb/batterystats_proto / presenter）
-- `analyzer/health/health.go`（import aggregated / presenter）
-- `analyzer/health/health_test.go`（import aggregated / presenter）
+**曾经受 import 路径 bug 影响的文件**（已全部修复）：
+> ⚠️ 其中 `analyzer/health/health.go` / `analyzer/health/health_test.go` / `cmd/healthcheck/main.go` 三个文件已于 commit `8a271c6` 随自定义健康度评分功能整体移除而删除。
+
+- `analyzer/core.go`（import aggregated / presenter / pb/batterystats_proto；原还 import analyzer/health，已随功能移除）
 - `cmd/battery-historian/mcp.go`（import aggregated / analyzer / presenter / wakeupreason）
 - `cmd/battery-historian/mcp_store.go`（import analyzer）
-- `cmd/healthcheck/main.go`（import analyzer）
 
 ---
 
@@ -121,7 +126,7 @@
 | `query_app_stats` | `AnalysisResult.AppStats`（`presenter.AppStat` `presenter.go:251` 内部组装） |
 | `query_histogram` | `AnalysisResult.HistogramStats`（`presenter.HistogramStats` `presenter.go:125`） |
 | `query_wakelocks` / `wakeup_reasons` / `sync_tasks` | `Checkin.UserspaceWakelocks` / `WakeupReasons` / `SyncTasks` |
-| `query_health` (P3-C) | `AnalysisResult.Health`（`health.Evaluate` `analyzer/health/health.go:81`） |
+| `query_health` (P3-C) ❌ 已移除（commit `8a271c6`） | 原 `AnalysisResult.Health`（`health.Evaluate` `analyzer/health/health.go:81`） |
 | `query_power` (P4) | `AnalysisResult.PowerSummary`（`power.Parse` `analyzer/power/power.go` ← `bugreportutils.ExtractServiceDump(raw,"power")`） |
 | `query_alarms` (P4) | `AnalysisResult.AlarmSummary`（`alarm.Parse` `analyzer/alarm/alarm.go`，Top-N 在 MCP 层截断） |
 | `query_activity` (P4) | `AnalysisResult.ActivityStats`（`dumpsysactivity.Parse` `analyzer/dumpsysactivity/activity.go`，kind 过滤在 MCP 层） |
@@ -149,7 +154,7 @@
 ### 2026-07-18 现状校准（实施后回填）
 代码已实现 P1/P2/P3-B/P3-C，对需求矩阵做现状校准，发现并修正 5 处偏差：
 1. **主需求矩阵表加"实施状态"列**：每行明确 Form A / Form B 落地情况；删除原"技术风险"列（已无意义），用"实施状态"列替代。
-2. **新增 FR-17/18/19**：原矩阵未规划 P3-B/C 需求，补 chart resource / report resource / health 查询（tool + resource + prompt 三件套）。
+2. **新增 FR-17/18/19**：原矩阵未规划 P3-B/C 需求，补 chart resource / report resource（P3-B）+ health 查询（tool + resource + prompt 三件套，P3-C，已于 commit `8a271c6` 移除）。
 3. **底层复用源码定位修正**：
    - `combineCheckinData` → `CombineCheckinData`（**首字母大写已导出**），行号 419 → 421
    - `analyzer.parseBugReport` (`analyzer.go:659`) → `analyzer.Analyze` (`core.go:84`)（MCP 层不再直接调 `parseBugReport`）
@@ -174,8 +179,8 @@ import 路径 bug 已批量修复，并完成一轮 code review 发现的 14 项
    - FR-06 `query_wakelocks` 注册 `kind` 参数（`mcp.Enum("userspace", "kernel")`）。
    - FR-07 `wakeupReasonsHandler` 接入 `wakeupreason.FindSubsystem` 真正解码。
    - FR-11 `raw_checkin` 改用 `jsonpb.Marshaler` 输出 JSON（原为 proto text）。
-4. **FR-19 `query_health` 评分逻辑加固**：
-   - 新增 `isFinite` helper，`Evaluate` / `lerpDown` / `lerpUp` 防护 NaN/Inf 输入。
+4. **FR-19 `query_health` 评分逻辑加固（⚠️ 已失效，仅作历史归档）**：以下 `health.Evaluate` / `buildAlerts` / `summarize` 优化涉及的自定义健康度评分逻辑，已于 commit `8a271c6` 随功能整体移除，现不适用。
+   - 原加固内容：新增 `isFinite` helper，`Evaluate` / `lerpDown` / `lerpUp` 防护 NaN/Inf 输入。
    - 全维度 `Valid=false` 时返回 `Grade="N/A"` 而非误导性的 `0 分 / F`。
    - `wakelock_burden` / `wakeup_sync_freq` / `app_stability` / `doze_adoption` / `modem_activity` 5 个维度增加"无数据"判定。
    - `buildAlerts` 新增 `alertValue` helper 按维度返回带单位值（`%/h` / `%` / `次/h` / `次`）；排序从单 level 改为 level + score 升序二级排序。

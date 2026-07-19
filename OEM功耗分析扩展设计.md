@@ -6,13 +6,19 @@
 
 ---
 
+## ⚠️ 功能移除声明（2026-07-19）
+
+> 自定义电池**健康度评分**功能（原 P3-C）已于 commit `8a271c6` 整体移除：含 `analyzer/health` 包、`query_health` tool、`bugreport://{id}/health` resource、`battery_health_report` prompt、`cmd/healthcheck` CLI。用户认为其对问题分析实际意义不大。**原生 batterystats `HistogramStats`（FR-05 `query_histogram`，即「健康度直方图」）保留不受影响。** 本设计文档 §1.1 现状与 §5.3 提到的「健康度评分 / battery_health_report」均指向**已移除**能力，请勿据此对接。
+
+---
+
 ## 1. 背景与动机
 
 ### 1.1 现状
-当前 MCP（Form B，v0.2.0）9 tools / 6 resources / 3 prompts 全部基于 `dumpsys batterystats` 一个段。能回答：
+当前 MCP（Form B，v0.2.0）9 tools（含已移除的 `query_health`，现 8）/ 6 resources / 2 prompts（`battery_health_report` 已于 commit 8a271c6 移除）全部基于 `dumpsys batterystats` 一个段。能回答：
 - 功耗大户排名（按 mAh 预测）
 - wakelock 时长排名、唤醒原因 Top-N、sync 任务频率
-- 待机/亮屏放电率、A/B delta、健康度评分
+- 待机/亮屏放电率、A/B delta、健康度评分（⚠️ 自定义健康度评分功能已于 commit 8a271c6 移除，原生 `HistogramStats` 直方图保留）
 
 ### 1.2 不能回答的问题（OEM 测试痛点）
 - **"这个 wakelock 是谁持有的、持了多久没释放？"** → batterystats 只给聚合时长，给不了实时快照
@@ -431,7 +437,7 @@ type ProcessState struct {
 | `bugreport://{id}/procstats` | `*procstats.Summary` 完整 JSON | application/json |
 
 ### 5.3 不新增 Prompt
-现有 3 个 prompt（`battery_root_cause` / `battery_ab_report` / `battery_health_report`）是模板，AI 客户端可自行把 `query_power` 等结果作为 `metrics` 参数传入，无需新增 prompt。
+现有 2 个 prompt（`battery_root_cause` / `battery_ab_report`，`battery_health_report` 已于 commit 8a271c6 移除）是模板，AI 客户端可自行把 `query_power` 等结果作为 `metrics` 参数传入，无需新增 prompt。
 
 ### 5.4 report_index 兼容
 4 个新 Tool 全部支持 `report_index` 参数，复用现有 `reportIndexFromReq` helper（mcp.go:216），A/B 对比时可访问 B 报告。

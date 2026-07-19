@@ -137,7 +137,9 @@ $ go run cmd/battery-historian/battery-historian.go --mcp --mcp_transport=http -
 $ go run cmd/battery-historian/battery-historian.go --mcp --mcp_with_chart
 ```
 
-**已注册能力（v0.3.0）**：13 tools / 10 resources / 3 prompts。
+**已注册能力（v0.3.0）**：12 tools / 9 resources / 2 prompts。
+
+> ⚠️ 自定义电池**健康度评分**功能（原 P3-C：`query_health` tool / `bugreport://{id}/health` resource / `battery_health_report` prompt）已于 commit `8a271c6` 整体移除，对问题分析意义不大；原生「健康度直方图」（`query_histogram` 的 `HistogramStats`）保留。下表以删除线标注已移除项。
 
 | 类别 | 名称 | 说明 |
 |---|---|---|
@@ -149,7 +151,7 @@ $ go run cmd/battery-historian/battery-historian.go --mcp --mcp_with_chart
 | Tool | `query_wakelocks` | Userspace/Kernel wakelock 明细（支持 `kind` 过滤） |
 | Tool | `query_wakeup_reasons` | 唤醒原因（接入 `wakeupreason.FindSubsystem` 解码） |
 | Tool | `query_sync_tasks` | 同步任务频率与时长 |
-| Tool | `query_health` | 电池健康度评分（0-100，6 维度加权） |
+| Tool | ~~`query_health`~~ **已移除（commit 8a271c6）** | 原电池健康度评分（6 维度加权） |
 | Tool | `query_power` | dumpsys power 段：实时 wakelock 快照 + suspend blockers + 省电 drain |
 | Tool | `query_alarms` | dumpsys alarm 段：pending 队列 + Top-N 重复 alarm 排名（支持 `topN`） |
 | Tool | `query_activity` | dumpsys activity 段：ANR / LMK / 进程退出 / 运行中进程（支持 `kind` 过滤） |
@@ -159,16 +161,16 @@ $ go run cmd/battery-historian/battery-historian.go --mcp --mcp_with_chart
 | Resource | `bugreport://{id}/raw_checkin` | 原始 batterystats proto → JSON |
 | Resource | `bugreport://{id}/chart` | Historian plot HTML 或 V2 SVG fallback |
 | Resource | `bugreport://{id}/report` | 自包含分析报告 HTML |
-| Resource | `bugreport://{id}/health` | 健康度评分 JSON |
+| Resource | ~~`bugreport://{id}/health`~~ **已移除（commit 8a271c6）** | 原健康度评分 JSON |
 | Resource | `bugreport://{id}/power` | dumpsys power 段完整 JSON |
 | Resource | `bugreport://{id}/alarms` | dumpsys alarm 段完整 JSON |
 | Resource | `bugreport://{id}/activity` | dumpsys activity 段完整 JSON |
 | Resource | `bugreport://{id}/procstats` | dumpsys procstats 段完整 JSON |
 | Prompt | `battery_root_cause` | 根因分析提示词模板 |
 | Prompt | `battery_ab_report` | A/B 报告提示词模板 |
-| Prompt | `battery_health_report` | 健康度改进建议提示词模板 |
+| Prompt | ~~`battery_health_report`~~ **已移除（commit 8a271c6）** | 原健康度改进建议提示词模板 |
 
-> 全部 11 个 `query_*` 工具支持 `report_index` 参数（默认 `0`=A 报告，`1`=B 报告），用于在 `compare_bugreports` 结果中访问第二份报告。
+> 全部 10 个 `query_*` 工具支持 `report_index` 参数（默认 `0`=A 报告，`1`=B 报告），用于在 `compare_bugreports` 结果中访问第二份报告。
 >
 > **OEM 功耗分析扩展（P4）**：`query_power` / `query_alarms` / `query_activity` / `query_procstats` 解析 bugreport 中其他 dumpsys 段，与 `dumpsys batterystats`（`query_wakelocks` 等基于此）互补，构成完整的「唤醒源归因 + 功耗大户行为佐证」闭环。详见 `OEM功耗分析扩展设计.md`。
 
