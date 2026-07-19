@@ -1,0 +1,243 @@
+/**
+ * Battery Historian - 主题(深色)与响应式增强
+ *
+ * 设计原则：
+ *  - 浅色为默认，沿用原有样式，不做任何覆盖，确保零回归；
+ *  - 仅通过 [data-theme="dark"] 提供暗色覆盖，所有颜色走 CSS 变量；
+ *  - 响应式仅在窄屏下生效，桌面布局保持不变。
+ *  - 切换状态由 base.html 内联脚本写入 <html data-theme>，并记忆到 localStorage。
+ */
+
+:root {
+  --bh-bg: #ffffff;
+  --bh-bg-elevated: #f5f5f5;
+  --bh-text: #333333;
+  --bh-text-muted: #777777;
+  --bh-border: #dddddd;
+  --bh-panel-bg: #ffffff;
+  --bh-panel-heading: #f5f5f5;
+  --bh-link: #337ab7;
+  --bh-row-hover: #f5f5f5;
+  --bh-table-head: #f5f5f5;
+}
+
+[data-theme="dark"] {
+  --bh-bg: #1e1e1e;
+  --bh-bg-elevated: #2a2a2a;
+  --bh-text: #e6e6e6;
+  --bh-text-muted: #9aa0a6;
+  --bh-border: #3c3c3c;
+  --bh-panel-bg: #262626;
+  --bh-panel-heading: #2d2d2d;
+  --bh-link: #6cb6ff;
+  --bh-row-hover: #333333;
+  --bh-table-head: #2d2d2d;
+}
+
+/* ---------- 基础背景与文字 ---------- */
+[data-theme="dark"] body {
+  background-color: var(--bh-bg);
+  color: var(--bh-text);
+}
+
+/* ---------- Bootstrap 面板 ---------- */
+[data-theme="dark"] .panel {
+  background-color: var(--bh-panel-bg);
+  border-color: var(--bh-border);
+}
+[data-theme="dark"] .panel-default > .panel-heading {
+  background-color: var(--bh-panel-heading);
+  color: var(--bh-text);
+  border-color: var(--bh-border);
+}
+[data-theme="dark"] .panel-footer {
+  background-color: var(--bh-panel-heading);
+  color: var(--bh-text);
+  border-color: var(--bh-border);
+}
+[data-theme="dark"] .panel-group .panel-tabs .panel-heading {
+  border-bottom-color: var(--bh-border);
+}
+
+/* ---------- 表格 ---------- */
+[data-theme="dark"] table,
+[data-theme="dark"] .table {
+  color: var(--bh-text);
+}
+[data-theme="dark"] .table > thead > tr > th,
+[data-theme="dark"] .table > tbody > tr > th,
+[data-theme="dark"] .table > tfoot > tr > th,
+[data-theme="dark"] .table > thead > tr > td,
+[data-theme="dark"] .table > tbody > tr > td,
+[data-theme="dark"] .table > tfoot > tr > td {
+  border-color: var(--bh-border);
+}
+[data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+[data-theme="dark"] .table-hover > tbody > tr:hover > td,
+[data-theme="dark"] .table > tbody > tr:hover > td {
+  background-color: var(--bh-row-hover);
+  color: var(--bh-text);
+}
+[data-theme="dark"] .table-bordered,
+[data-theme="dark"] .table-bordered > thead > tr > th,
+[data-theme="dark"] .table-bordered > tbody > tr > th,
+[data-theme="dark"] .table-bordered > tfoot > tr > th,
+[data-theme="dark"] .table-bordered > thead > tr > td,
+[data-theme="dark"] .table-bordered > tbody > tr > td,
+[data-theme="dark"] .table-bordered > tfoot > tr > td {
+  border-color: var(--bh-border);
+}
+[data-theme="dark"] .table-bordered > thead > tr > td,
+[data-theme="dark"] .table-bordered > thead > tr > th {
+  border-bottom-color: var(--bh-border);
+}
+
+/* ---------- 链接 ---------- */
+[data-theme="dark"] a,
+[data-theme="dark"] a:visited {
+  color: var(--bh-link);
+}
+
+/* ---------- 表单控件 ---------- */
+[data-theme="dark"] .form-control {
+  background-color: var(--bh-bg-elevated);
+  color: var(--bh-text);
+  border-color: var(--bh-border);
+}
+[data-theme="dark"] .input-group-addon {
+  background-color: var(--bh-panel-heading);
+  color: var(--bh-text);
+  border-color: var(--bh-border);
+}
+
+/* ---------- DataTables 搜索/分页 ---------- */
+[data-theme="dark"] .dataTables_wrapper .dataTables_filter input,
+[data-theme="dark"] .dataTables_wrapper .dataTables_length select {
+  background-color: var(--bh-bg-elevated);
+  color: var(--bh-text);
+  border-color: var(--bh-border);
+}
+[data-theme="dark"] .dataTables_wrapper,
+[data-theme="dark"] .dataTables_info,
+[data-theme="dark"] .dataTables_paginate,
+[data-theme="dark"] .dataTables_length,
+[data-theme="dark"] .dataTables_filter {
+  color: var(--bh-text-muted);
+}
+[data-theme="dark"] .paginate_button,
+[data-theme="dark"] .paginate_active {
+  color: var(--bh-link) !important;
+}
+
+/* ---------- 模态框 ---------- */
+[data-theme="dark"] .modal-content {
+  background-color: var(--bh-panel-bg);
+  color: var(--bh-text);
+  border-color: var(--bh-border);
+}
+[data-theme="dark"] .modal-header,
+[data-theme="dark"] .modal-footer {
+  border-color: var(--bh-border);
+}
+[data-theme="dark"] .close {
+  color: var(--bh-text);
+  opacity: 0.8;
+}
+
+/* ---------- 下拉 / 滚动菜单 ---------- */
+[data-theme="dark"] .dropdown-menu {
+  background-color: var(--bh-panel-bg);
+  border-color: var(--bh-border);
+}
+[data-theme="dark"] .dropdown-menu > li > a {
+  color: var(--bh-text);
+}
+[data-theme="dark"] .dropdown-menu > li > a:hover {
+  background-color: var(--bh-row-hover);
+  color: var(--bh-text);
+}
+[data-theme="dark"] .scrollable-menu {
+  background-color: var(--bh-panel-bg);
+}
+
+/* ---------- 项目自定义浅色硬编码覆盖 ---------- */
+[data-theme="dark"] .accordion-heading:hover { background-color: var(--bh-row-hover); }
+[data-theme="dark"] .list-item-active { background-color: #333333; }
+[data-theme="dark"] .summary-title:hover,
+[data-theme="dark"] .summary-title-inline:hover,
+[data-theme="dark"] .summary-title-highlight { background: #333; }
+[data-theme="dark"] .table-indices .list-group-item:hover { background: #333; }
+[data-theme="dark"] .configurations tr:hover { background-color: #333; }
+[data-theme="dark"] .settings-overflow { background-color: #2a2a2a; }
+[data-theme="dark"] .settings-overflow a { color: var(--bh-text); }
+[data-theme="dark"] .settings-overflow a:hover { background-color: #333; }
+[data-theme="dark"] .historian-v2.settings .settings-section label:hover { background-color: #333; }
+
+/* ---------- SVG / d3 图表主题化 ---------- */
+[data-theme="dark"] .axis path,
+[data-theme="dark"] .axis line { stroke: #888; }
+[data-theme="dark"] .axis text { fill: var(--bh-text-muted); }
+[data-theme="dark"] .level-line,
+[data-theme="dark"] .level-line-connector,
+[data-theme="dark"] .level-event-marker-line,
+[data-theme="dark"] .time-point,
+[data-theme="dark"] .series-divider,
+[data-theme="dark"] .bars-group > rect:hover,
+[data-theme="dark"] .series-level rect:hover { stroke: #aaa; }
+[data-theme="dark"] .series-label,
+[data-theme="dark"] .level-event-marker-label { fill: var(--bh-text); }
+[data-theme="dark"] .level-summary.filtered { stroke: #555; }
+[data-theme="dark"] .historian-tooltip,
+[data-theme="dark"] .level-timeinfo {
+  background: rgba(30, 30, 30, 0.95);
+  color: var(--bh-text);
+  border-color: var(--bh-border);
+}
+[data-theme="dark"] #chart-tooltip {
+  background-color: #2a2a2a;
+  color: var(--bh-text);
+  border-color: var(--bh-border);
+}
+[data-theme="dark"] .powermonitor-overlay { stroke: #4caf50; }
+
+/* ---------- 主题切换按钮 ---------- */
+.navbar-toggle-theme {
+  float: right;
+  margin: 8px 0 8px 10px;
+  padding: 4px 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #ccc;
+  background: transparent;
+  border: 1px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.navbar-toggle-theme:hover { color: #fff; border-color: #888; }
+
+/* ===================== 响应式 ===================== */
+img, svg, canvas { max-width: 100%; }
+
+@media (max-width: 1050px) {
+  .histogram-chart { width: 100%; max-width: 100%; }
+  .pie-container { max-width: 100%; }
+  .wakeups-histogram .plot { max-width: 100%; }
+  html, body { overflow-x: hidden; }
+}
+
+@media (max-width: 768px) {
+  .navbar-brand { font-size: 1.4em; }
+  .fileinfo-table { margin-right: 0; }
+  #copy textarea { max-width: 100%; }
+  .label-left, .label-right {
+    position: static;
+    margin-left: 0;
+    left: auto;
+    padding-top: 10px;
+  }
+  #panel-tables .panel-body { overflow-x: auto; }
+  .historian-note { font-size: 0.9em; }
+  .navbar-toggle-theme { margin-top: 10px; }
+}
