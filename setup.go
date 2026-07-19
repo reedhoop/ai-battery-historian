@@ -1,4 +1,4 @@
-﻿// Copyright 2016 Google Inc. All Rights Reserved.
+// Copyright 2016 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,15 +27,16 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/reedhoop/ai-battery-historian/bugreportutils"
 	"github.com/reedhoop/ai-battery-historian/historianutils"
 )
 
 const (
-	closureCompilerVersion = "20170409"
-	closureCompilerZip     = "compiler-" + closureCompilerVersion + ".zip"
+	// 升级到 v20230802：旧版 v20170409 不支持 closure-library 中的 ES8+ 语法（async function），
+	// 导致编译报 19 个 ERROR。新版要求 Java 11+。
+	closureCompilerVersion = "20230802"
 	closureCompilerJar     = "closure-compiler-v" + closureCompilerVersion + ".jar"
-	closureCompilerURL     = "http://dl.google.com/closure-compiler/" + closureCompilerZip
+	// 新版 closure-compiler 发布在 Maven Central，不再发布到 dl.google.com 的 zip 包。
+	closureCompilerURL = "https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/v" + closureCompilerVersion + "/" + closureCompilerJar
 
 	thirdPartyDir = "third_party"
 	compiledDir   = "compiled"
@@ -116,7 +117,7 @@ func main() {
 	}
 
 	_, errD := os.Stat(closureCompilerDir)
-	_, errF := os.Stat(path.Join(closureCompilerDir, closureCompilerZip))
+	_, errF := os.Stat(path.Join(closureCompilerDir, closureCompilerJar))
 	if os.IsNotExist(errD) || os.IsNotExist(errF) {
 		fmt.Println("\nDownloading Closure compiler...")
 		// Current compiler, if any, is not current. Remove old files.
@@ -129,33 +130,20 @@ func main() {
 		resp, err := http.Get(closureCompilerURL)
 		if err != nil {
 			fmt.Printf("Failed to download Closure compiler: %v\n", err)
-			fmt.Printf("\nIf this persists, please manually download the compiler from %s into the %s directory, unzip it into the %s diretory, and rerun this script.\n\n", closureCompilerURL, closureCompilerDir, closureCompilerDir)
+			fmt.Printf("\nIf this persists, please manually download the compiler jar from %s into the %s directory and rerun this script.\n\n", closureCompilerURL, closureCompilerDir)
 			return
 		}
 		defer resp.Body.Close()
 
 		contents, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			fmt.Printf("Couldn't get zip contents: %v\n", err)
+			fmt.Printf("Couldn't get jar contents: %v\n", err)
 			return
 		}
 
-		if err := saveFile(path.Join(closureCompilerDir, closureCompilerZip), contents); err != nil {
-			fmt.Printf("Couldn't save Closure zip file: %v\n", err)
+		if err := saveFile(path.Join(closureCompilerDir, closureCompilerJar), contents); err != nil {
+			fmt.Printf("Couldn't save Closure jar file: %v\n", err)
 			return
-		}
-
-		files, err := bugreportutils.Contents("", contents)
-		if err != nil {
-			fmt.Printf("Couldn't get Closure zip contents: %v\n", err)
-			return
-		}
-		for n, c := range files {
-			name := n[1:]
-			if err := saveFile(path.Join(closureCompilerDir, name), c); err != nil {
-				fmt.Printf("Couldn't save Closure content file: %v\n", err)
-				return
-			}
 		}
 	}
 
@@ -179,16 +167,23 @@ func main() {
 	}
 
 	fmt.Println("\nGenerating optimized JS runfiles...")
+	// 新版 closure-compiler v20230802 选项变更：
+	//   --closure_entry_point → --entry_point=goog:<namespace>
+	//   --only_closure_dependencies → --dependency_mode=PRUNE_LEGACY
+	// 使用 WHITESPACE_ONLY 而非 SIMPLE_OPTIMIZATIONS：v20230802 在 PRUNE_LEGACY + SIMPLE_OPTIMIZATIONS
+	// 模式下会把 historian.BarData.Legend={} 排序到 historian.BarData=function 之前，导致
+	// "Cannot set properties of undefined (setting 'Legend')" 运行时错误。WHITESPACE_ONLY 保留
+	// goog.provide 运行时调用，由 base.js 正确创建命名空间，避免排序问题。
 	runCommand("java", "-jar",
 		path.Join(closureCompilerDir, closureCompilerJar),
-		"--closure_entry_point", "historian.upload",
+		"--entry_point=goog:historian.upload",
 		"--js", "js/*.js",
 		"--js", path.Join(closureLibraryDir, "closure/goog/base.js"),
 		"--js", path.Join(closureLibraryDir, "closure/goog/**/*.js"),
-		"--only_closure_dependencies",
+		"--dependency_mode=PRUNE_LEGACY",
 		"--generate_exports",
 		"--js_output_file", path.Join(wd, compiledDir, "historian-optimized.js"),
 		"--output_manifest", path.Join(wd, compiledDir, "manifest.MF"),
-		"--compilation_level", "SIMPLE_OPTIMIZATIONS",
+		"--compilation_level", "WHITESPACE_ONLY",
 	)
 }
