@@ -216,6 +216,8 @@
   cursor: pointer;
 }
 .navbar-toggle-theme:hover { color: #fff; border-color: #888; }
+.navbar-toggle-theme .theme-icon { display: inline-flex; vertical-align: middle; }
+.navbar-toggle-theme .theme-icon svg { display: block; }
 
 /* ===================== 响应式 ===================== */
 img, svg, canvas { max-width: 100%; }

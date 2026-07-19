@@ -47,7 +47,7 @@ specific language governing permissions and limitations under the License.
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/3.3.6/js/bootstrap.min.js"></script>
 
     <script src="https://cdn.bootcdn.net/ajax/libs/flot/0.8.3/jquery.flot.min.js" type="text/javascript"></script>
-    <script src="third_party/flot-axislabels/jquery.flot.axislabels.js?ver={{.ResVersion}}" type="text/javascript"></script>
+    <script src="static/vendor/jquery.flot.axislabels.js?ver={{.ResVersion}}" type="text/javascript"></script>
     <!-- jquery.flot.orderBars.js 原 CDN 已失效，仅影响柱状图排序，非上传必需，注释掉 -->
     <!-- <script src="//www.benjaminbuffet.com/public/js/jquery.flot.orderBars.js" type="text/javascript"></script> -->
     <script src="https://cdn.bootcdn.net/ajax/libs/flot/0.8.3/jquery.flot.pie.min.js" type="text/javascript"></script>
@@ -81,7 +81,7 @@ specific language governing permissions and limitations under the License.
     <script src="static/vendor/bootstrap-3.3.6.min.js?ver={{.ResVersion}}"></script>
 
     <script src="static/vendor/jquery.flot-0.8.3.min.js?ver={{.ResVersion}}" type="text/javascript"></script>
-    <script src="third_party/flot-axislabels/jquery.flot.axislabels.js?ver={{.ResVersion}}" type="text/javascript"></script>
+    <script src="static/vendor/jquery.flot.axislabels.js?ver={{.ResVersion}}" type="text/javascript"></script>
     <!-- jquery.flot.orderBars.js 原 CDN 已失效，仅影响柱状图排序，非上传必需，注释掉 -->
     <!-- <script src="//www.benjaminbuffet.com/public/js/jquery.flot.orderBars.js" type="text/javascript"></script> -->
     <script src="static/vendor/jquery.flot.pie-0.8.3.min.js?ver={{.ResVersion}}" type="text/javascript"></script>
@@ -108,12 +108,17 @@ specific language governing permissions and limitations under the License.
 
     <title>Battery Historian</title>
     <script>
+      var ICON_SUN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/></svg>';
+      var ICON_MOON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
       document.addEventListener('DOMContentLoaded', function () {
         var btn = document.getElementById('theme-toggle');
         if (!btn) return;
         function sync() {
           var t = document.documentElement.getAttribute('data-theme');
-          btn.textContent = (t === 'dark') ? '浅色' : '深色';
+          // 深色时显示太阳(点击切浅色)，浅色时显示月亮(点击切深色)
+          var icon = (t === 'dark') ? ICON_SUN : ICON_MOON;
+          var span = btn.querySelector('.theme-icon');
+          if (span) span.innerHTML = icon;
         }
         sync();
         btn.addEventListener('click', function () {
@@ -130,10 +135,10 @@ specific language governing permissions and limitations under the License.
   <body>
     <nav class="navbar navbar-inverse navbar-fixed-top">
       <div class="container-fluid">
-      <div class="navbar-header">
-        <a href="." class="navbar-brand">Battery Historian</a>
-        <button id="theme-toggle" type="button" class="navbar-toggle-theme" aria-label="切换深色/浅色主题" title="切换深色/浅色主题">主题</button>
-      </div>
+        <div class="navbar-header">
+          <a href="." class="navbar-brand">Battery Historian</a>
+          <button id="theme-toggle" type="button" class="navbar-toggle-theme" aria-label="切换深色/浅色主题" title="切换深色/浅色主题"><span class="theme-icon" aria-hidden="true"></span></button>
+        </div>
         <div id="navbar" class="collapse navbar-collapse">
           <ul id="menu-top" class="nav navbar-nav navbar-right" style="display: none">
             <li class="dropdown sdk-version-21">
