@@ -26,6 +26,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/reedhoop/ai-battery-historian/historianutils"
 )
@@ -174,16 +175,85 @@ func main() {
 	// 模式下会把 historian.BarData.Legend={} 排序到 historian.BarData=function 之前，导致
 	// "Cannot set properties of undefined (setting 'Legend')" 运行时错误。WHITESPACE_ONLY 保留
 	// goog.provide 运行时调用，由 base.js 正确创建命名空间，避免排序问题。
-	runCommand("java", "-jar",
+
+	// 收集 closure/goog 下的 JS 输入，排除 demos/ 目录以及 *_test.js 文件，
+	// 避免把 goog.testing/csp_test.js 等测试基础设施打进生产包。csp_test.js 的顶层代码会
+	// 无条件注入 strict-dynamic 的 CSP，挡掉页面内联脚本，并让 closure 测试框架在首个测试前
+	// 就检测到 CSP 违规，导致 csp_test 用例全部 setUpPage 失败。
+	// 注意：不要整目录排除 testing/，否则会连 goog.testing.TestCase（测试运行器框架，被生产包
+	// 间接依赖）一起剔除，引发 "namespace not provided" 编译错误。只排除 *_test.js 即可精准拿掉
+	// csp_test.js，同时保留 testcase / cspviolationobserver 等运行所需文件。
+	closureGoogDir := path.Join(closureLibraryDir, "closure", "goog")
+	var closureJsArgs []string
+	filepath.Walk(closureGoogDir, func(p string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if filepath.Ext(p) != ".js" {
+			return nil
+		}
+		rel, _ := filepath.Rel(closureGoogDir, p)
+		for _, part := range strings.Split(rel, string(os.PathSeparator)) {
+			if part == "demos" {
+				return nil
+			}
+		}
+		if strings.HasSuffix(info.Name(), "_test.js") {
+			return nil
+		}
+		closureJsArgs = append(closureJsArgs, "--js", p)
+		return nil
+	})
+
+	// 应用的 JS 同样排除 *_test.js（测试文件不应进入生产包）。
+	jsFiles, _ := filepath.Glob("js/*.js")
+	var jsJsArgs []string
+	for _, f := range jsFiles {
+		if strings.HasSuffix(f, "_test.js") {
+			continue
+		}
+		jsJsArgs = append(jsJsArgs, "--js", f)
+	}
+
+	compilerArgs := []string{
+		"-jar",
 		path.Join(closureCompilerDir, closureCompilerJar),
 		"--entry_point=goog:historian.upload",
-		"--js", "js/*.js",
-		"--js", path.Join(closureLibraryDir, "closure/goog/base.js"),
-		"--js", path.Join(closureLibraryDir, "closure/goog/**/*.js"),
+	}
+	compilerArgs = append(compilerArgs, jsJsArgs...)
+	compilerArgs = append(compilerArgs, closureJsArgs...)
+	compilerArgs = append(compilerArgs,
 		"--dependency_mode=PRUNE_LEGACY",
 		"--generate_exports",
 		"--js_output_file", path.Join(wd, compiledDir, "historian-optimized.js"),
 		"--output_manifest", path.Join(wd, compiledDir, "manifest.MF"),
 		"--compilation_level", "WHITESPACE_ONLY",
 	)
+
+	// Windows 对单条命令行的长度有上限（约 32K），当 --js 输入文件非常多时极易触发
+	// "The filename or extension is too long"（fork/exec 失败），导致 setup 无法重建 bundle。
+	// 改用 Java 的 @argfile 机制：把所有参数写入临时文件，再让 java 从文件读取，绕开命令行长度限制。
+	argFileContent := strings.Builder{}
+	for _, a := range compilerArgs {
+		// Java @argfile 中反斜杠是转义符，统一转成前向斜杠避免解析错误（Windows 路径也接受 /）。
+		a = strings.ReplaceAll(a, "\\", "/")
+		argFileContent.WriteString(a)
+		argFileContent.WriteString("\n")
+	}
+	argFile, err := ioutil.TempFile("", "closure-args-*.txt")
+	if err != nil {
+		fmt.Printf("Couldn't create closure argfile: %v\n", err)
+		return
+	}
+	defer os.Remove(argFile.Name())
+	if _, err := argFile.WriteString(argFileContent.String()); err != nil {
+		fmt.Printf("Couldn't write closure argfile: %v\n", err)
+		return
+	}
+	if err := argFile.Close(); err != nil {
+		fmt.Printf("Couldn't close closure argfile: %v\n", err)
+		return
+	}
+	// @ 之后的文件路径同样做 / 转换，规避 Java 对反斜杠转义的误处理。
+	runCommand("java", "@"+strings.ReplaceAll(argFile.Name(), "\\", "/"))
 }
