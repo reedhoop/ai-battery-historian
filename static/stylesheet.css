@@ -439,3 +439,16 @@ pre {
   color: #777;
   font-size: 12px;
 }
+
+/* 健康度面板关闭按钮 — 用纯文本 × 替代缺失的 glyphicon 字体 */
+.health-close-btn {
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 700;
+  color: #999;
+  padding: 2px 5px;
+  min-width: auto;
+}
+.health-close-btn:hover {
+  color: #333;
+}

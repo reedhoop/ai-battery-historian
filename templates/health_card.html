@@ -19,8 +19,11 @@ limitations under the License.
     <span>电池健康度</span>
     <span class="label label-default health-grade">等级 {{.Grade}}</span>
     <span id="toggle-health"
-          class="glyphicon glyphicon-remove btn btn-default btn-right btn-xxs"
-          data-toggle="collapse" data-target="#panel-health">
+          class="health-close-btn btn btn-default btn-right btn-xxs"
+          data-toggle="collapse" data-target="#panel-health"
+          aria-label="隐藏健康度面板"
+          title="隐藏健康度面板">
+      &times;
     </span>
   </div>
   <div class="panel-body">
