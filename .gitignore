@@ -10,6 +10,9 @@
 
 # Go 工作区文件
 vendor/
+# 例外：本地托管的 CDN 前端库（static/vendor/）需入库，
+# 以便 clone 后默认本地模式即可离线/内网直接运行（对应 templates/base.html 的默认本地分支）
+!static/vendor/
 
 # Battery Historian 第三方依赖目录
 # closure-library 通过 git submodule 引入，closure-compiler jar 由 setup.go 下载

@@ -90,6 +90,7 @@ var (
 	// Initialized in SetScriptsDir()
 	scriptsDir    string
 	isOptimizedJs bool
+	useCDN        bool // Default false = local static/vendor assets; true = external bootcdn.net CDN.
 
 	// Initialized in SetResVersion()
 	resVersion int
@@ -433,6 +434,13 @@ func SetIsOptimized(optimized bool) {
 	isOptimizedJs = optimized
 }
 
+// SetUseCDN sets whether frontend assets are loaded from the external CDN
+// (bootcdn.net) instead of the local vendored copies in static/vendor.
+// Default false = local/offline.
+func SetUseCDN(v bool) {
+	useCDN = v
+}
+
 // closeConnection closes the http connection and writes a response.
 func closeConnection(w http.ResponseWriter, s string) {
 	if flusher, ok := w.(http.Flusher); ok {
@@ -453,9 +461,11 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 	uploadData := struct {
 		IsOptimizedJs bool
 		ResVersion    int
+		UseCDN        bool
 	}{
 		isOptimizedJs,
 		resVersion,
+		useCDN,
 	}
 
 	if err := uploadTempl.Execute(w, uploadData); err != nil {

@@ -27,6 +27,7 @@ import (
 
 var (
 	optimized = flag.Bool("optimized", true, "Whether to output optimized js files. Disable for local debugging.")
+	useCDN    = flag.Bool("use_cdn", false, "Load frontend assets from external bootcdn.net CDN instead of the local vendored copies in static/vendor. Default false = local/offline.")
 	port      = flag.Int("port", 9999, "service port")
 
 	compiledDir   = flag.String("compiled_dir", "./compiled", "Directory containing compiled js file for Historian v2.")
@@ -138,6 +139,7 @@ func main() {
 	analyzer.SetScriptsDir(*scriptsDir)
 	analyzer.SetResVersion(*resVersion)
 	analyzer.SetIsOptimized(*optimized)
+	analyzer.SetUseCDN(*useCDN)
 	log.Println("Listening on port: ", *port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
 }
