@@ -411,6 +411,12 @@ pre {
 .health-grade-text {
   font-weight: 600;
 }
+.health-coverage {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #999;
+  font-weight: 400;
+}
 .health-grade {
   margin-left: 8px;
   font-size: 13px;

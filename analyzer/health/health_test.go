@@ -15,6 +15,7 @@
 package health
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -29,6 +30,20 @@ func checkin(offRate, partial, kernel, modem float32, offRealtime time.Duration)
 		ScreenOffDischargeRatePerHr:   aggregated.MFloat32{V: offRate},
 		PartialWakelockTimePercentage: partial,
 		KernelOverheadTimePercentage:  kernel,
+		ModemDischargeRatePerHr:       aggregated.MFloat32{V: modem},
+	}
+}
+
+// checkinFull is like checkin but also sets FullWakelockTimePercentage so tests
+// can exercise the corrected wakelock-burden metric.
+func checkinFull(offRate, partial, kernel, full, modem float32, offRealtime time.Duration) aggregated.Checkin {
+	return aggregated.Checkin{
+		Realtime:                      time.Hour,
+		ScreenOffRealtime:             offRealtime,
+		ScreenOffDischargeRatePerHr:   aggregated.MFloat32{V: offRate},
+		PartialWakelockTimePercentage: partial,
+		KernelOverheadTimePercentage:  kernel,
+		FullWakelockTimePercentage:    full,
 		ModemDischargeRatePerHr:       aggregated.MFloat32{V: modem},
 	}
 }
@@ -121,5 +136,87 @@ func TestEvaluate_Deterministic(t *testing.T) {
 	b := Evaluate(c, h)
 	if a.Score != b.Score {
 		t.Errorf("Evaluate not deterministic: %.3f vs %.3f", a.Score, b.Score)
+	}
+}
+
+// TestWakelock_IgnoresKernelOverhead locks in the P0 fix: the wakelock-burden
+// metric must score partial+full wakelock time, NOT screen-off uptime. Here the
+// device is awake only 5% of the time (partial=5, full=0); the leftover 85%
+// screen-off time is captured by KernelOverheadTimePercentage and must NOT be
+// summed in. The old code produced v≈90 → "critical" on every overnight report.
+func TestWakelock_IgnoresKernelOverhead(t *testing.T) {
+	c := checkinFull(2, 5, 85, 0, 0.5, time.Hour)
+	h := hist(5, 2, 0, 0, 55)
+	r := Evaluate(c, h)
+	d := r.Dimensions[1] // wakelock_burden
+	if d.Key != "wakelock_burden" {
+		t.Fatalf("dimension[1] key = %q, want wakelock_burden", d.Key)
+	}
+	if !d.Valid {
+		t.Fatalf("wakelock dimension should be valid")
+	}
+	if d.MetricValue != 5 {
+		t.Errorf("wakelock metricValue = %.1f, want 5 (partial+full, kernel excluded)", d.MetricValue)
+	}
+	if d.Status == "poor" {
+		t.Errorf("wakelock scored poor (%.1f) — kernel overhead leaked in; detail=%q", d.Score, d.Detail)
+	}
+}
+
+// TestWakeupSync_NotCountedAsWakeups locks in the P1 fix: TotalAppSyncsPerHr is
+// a sync *duration* rate (seconds/hour), a different unit from wakeup counts, so
+// it must not be summed into the scored metric. 10 wakeups/h is healthy; 500
+// sync-seconds/h must surface as context only, not inflate the score to "次/h".
+func TestWakeupSync_NotCountedAsWakeups(t *testing.T) {
+	c := checkin(1.0, 2, 1, 0.5, time.Hour)
+	h := hist(10, 500, 0, 0, 55)
+	r := Evaluate(c, h)
+	d := r.Dimensions[2] // wakeup_sync_freq
+	if d.MetricValue != 10 {
+		t.Errorf("wakeup metricValue = %.1f, want 10 (sync seconds must not be added)", d.MetricValue)
+	}
+	if d.Status == "poor" {
+		t.Errorf("wakeup scored poor (%.1f) with only 10 wakeups/h; detail=%q", d.Score, d.Detail)
+	}
+	if !strings.Contains(d.Detail, "秒/h") {
+		t.Errorf("wakeup detail should surface sync duration; got %q", d.Detail)
+	}
+}
+
+// TestStability_AlwaysValid locks in the P2 fix: the old guard
+// `ANRCount<0 && CrashCount<0` was dead code (counts are non-negative). A report
+// with 0 ANR / 0 crash must still be scored as healthy (valid, score 100).
+func TestStability_AlwaysValid(t *testing.T) {
+	c := checkin(1.0, 2, 1, 0.5, time.Hour)
+	r := Evaluate(c, hist(0, 0, 0, 0, 55))
+	d := r.Dimensions[3] // app_stability
+	if !d.Valid {
+		t.Errorf("stability should be valid with 0 ANR/0 crash")
+	}
+	if d.Score != 100 || d.Status != "good" {
+		t.Errorf("stability = %.1f/%q, want 100/good (0 crashes = healthy)", d.Score, d.Status)
+	}
+}
+
+// TestEvaluatedCount_Tracking locks in the P2 display-precision fix: the report
+// must report how many of the 6 dimensions were actually scored so the composite
+// is not mistaken for a full evaluation.
+func TestEvaluatedCount_Tracking(t *testing.T) {
+	// All 6 dimensions scoreable.
+	rAll := Evaluate(checkin(1.0, 2, 1, 0.5, time.Hour), hist(5, 2, 0, 0, 55))
+	if rAll.Total != 6 {
+		t.Errorf("total = %d, want 6", rAll.Total)
+	}
+	if rAll.Evaluated != 6 {
+		t.Errorf("evaluated = %d, want 6 (all dims valid)", rAll.Evaluated)
+	}
+
+	// No screen-off time → standby dimension invalid → 5/6.
+	rPartial := Evaluate(checkin(0, 2, 1, 0.5, 0), hist(5, 2, 0, 0, 55))
+	if rPartial.Total != 6 {
+		t.Errorf("total = %d, want 6", rPartial.Total)
+	}
+	if rPartial.Evaluated != 5 {
+		t.Errorf("evaluated = %d, want 5 (standby invalid)", rPartial.Evaluated)
 	}
 }

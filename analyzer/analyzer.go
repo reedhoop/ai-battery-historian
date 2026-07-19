@@ -677,6 +677,8 @@ func toHealthReport(hr *health.Report) *presenter.HealthReport {
 		Score:       hr.Score,
 		Grade:       hr.Grade,
 		Summary:     hr.Summary,
+		Evaluated:   hr.Evaluated,
+		Total:       hr.Total,
 		GeneratedAt: hr.GeneratedAt.Format(time.RFC3339),
 	}
 	for _, d := range hr.Dimensions {

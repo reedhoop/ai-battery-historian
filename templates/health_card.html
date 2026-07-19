@@ -29,6 +29,7 @@ limitations under the License.
       <div class="health-score-meta">
         <div>综合评分 / 100</div>
         <div class="health-grade-text">等级 {{.Grade}}</div>
+        {{if lt .Evaluated .Total}}<div class="health-coverage">已评估 {{.Evaluated}} / {{.Total}} 项（N/A 未计入）</div>{{end}}
       </div>
     </div>
     {{if .Summary}}<div class="health-summary">{{.Summary}}</div>{{end}}

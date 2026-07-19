@@ -64,6 +64,12 @@ type Report struct {
 	Dimensions  []Dimension `json:"dimensions"`
 	Alerts      []Alert     `json:"alerts"`
 	GeneratedAt time.Time   `json:"generatedAt"`
+	// Evaluated is the number of dimensions that could actually be scored
+	// (had valid data); Total is the fixed number of dimensions. They let
+	// consumers show e.g. "已评估 3/6 项" so a composite built from a few
+	// dimensions is not mistaken for a full 100-point evaluation.
+	Evaluated int `json:"evaluated"`
+	Total     int `json:"total"`
 }
 
 // Weights for the 6 dimensions. They sum to 1.0.
@@ -100,10 +106,12 @@ func Evaluate(c aggregated.Checkin, h presenter.HistogramStats) *Report {
 	}
 
 	var weightSum, scoreSum float64
+	evaluated, total := 0, len(dims)
 	for _, d := range dims {
 		if d.Valid && isFinite(d.Score) {
 			weightSum += d.Weight
 			scoreSum += d.Score * d.Weight
+			evaluated++
 		}
 	}
 
@@ -117,6 +125,8 @@ func Evaluate(c aggregated.Checkin, h presenter.HistogramStats) *Report {
 			Dimensions:  dims,
 			Alerts:      nil,
 			GeneratedAt: time.Now(),
+			Evaluated:   0,
+			Total:       total,
 		}
 	}
 
@@ -135,6 +145,8 @@ func Evaluate(c aggregated.Checkin, h presenter.HistogramStats) *Report {
 		Dimensions:  dims,
 		Alerts:      alerts,
 		GeneratedAt: time.Now(),
+		Evaluated:   evaluated,
+		Total:       total,
 	}
 }
 
@@ -213,9 +225,17 @@ func standbyDimension(c aggregated.Checkin) Dimension {
 	}
 }
 
-// wakelockDimension scores the fraction of time spent in partial + kernel
+// wakelockDimension scores the fraction of time spent in partial + full
 // wakelocks (background work preventing sleep). Invalid when the report has
 // no total battery realtime (the percentage denominator is zero).
+//
+// NOTE: we must NOT add KernelOverheadTimePercentage. That field is defined
+// in aggregated_stats.go as ScreenOffUptimeMsec - PartialWakelockTimeMsec, so
+// Partial% + KernelOverhead% cancels out to ScreenOffUptime% — i.e. it would
+// measure how long the screen was off, not how long the device was held awake
+// by wakelocks. On any normal overnight report ScreenOffUptime is 60-90%, which
+// made this dimension report "critical" almost always. We score the real
+// wakelock hold time instead (partial + full).
 func wakelockDimension(c aggregated.Checkin) Dimension {
 	const good, poor = 5.0, 30.0
 	if c.Realtime <= 0 {
@@ -225,7 +245,7 @@ func wakelockDimension(c aggregated.Checkin) Dimension {
 			Detail: "报告期无电池运行时长，无法评估 wakelock 负担",
 		}
 	}
-	v := float64(c.PartialWakelockTimePercentage + c.KernelOverheadTimePercentage)
+	v := float64(c.PartialWakelockTimePercentage + c.FullWakelockTimePercentage)
 	s, ok := lerpDown(v, good, poor)
 	return Dimension{
 		Key:         "wakelock_burden",
@@ -234,25 +254,36 @@ func wakelockDimension(c aggregated.Checkin) Dimension {
 		Weight:      wWakelock,
 		Valid:       ok,
 		Status:      statusOf(s),
-		Detail:      fmt.Sprintf("partial+ kernel wakelock 占 %.1f%% 时间（健康≤%.0f%%，严重≥%.0f%%）", v, good, poor),
+		Detail:      fmt.Sprintf("partial + full wakelock 占 %.1f%% 时间（健康≤%.0f%%，严重≥%.0f%%）", v, good, poor),
 		MetricValue: v,
 	}
 }
 
-// wakeupDimension scores app wakeup + sync frequency (events per hour).
-// Invalid when the report carries no wakeup/sync data (both counters zero
-// is treated as "no data" rather than "perfect" to avoid rewarding silence).
+// wakeupDimension scores app wakeup frequency (events per hour). Invalid when
+// the report carries no wakeup/sync data at all.
+//
+// NOTE on units: we score on TotalAppWakeupsPerHr (a *count* per hour). The
+// companion field TotalAppSyncsPerHr is a sync *duration* rate (seconds/hour,
+// accumulated from SyncManager task durations) — a different unit that must
+// not be summed into the same number, or seconds would be silently treated as
+// "次数" and inflate the metric. We surface the sync duration as context in
+// the detail string instead of folding it into the score.
 func wakeupDimension(h presenter.HistogramStats) Dimension {
 	const good, poor = 20.0, 150.0
-	v := float64(h.TotalAppWakeupsPerHr) + float64(h.TotalAppSyncsPerHr)
-	if v <= 0 && h.TotalAppWakeupsPerHr == 0 && h.TotalAppSyncsPerHr == 0 {
+	wakeupsPerHr := float64(h.TotalAppWakeupsPerHr)
+	syncSecPerHr := float64(h.TotalAppSyncsPerHr)
+	if wakeupsPerHr <= 0 && syncSecPerHr <= 0 {
 		return Dimension{
 			Key: "wakeup_sync_freq", Label: "唤醒/同步频率", Weight: wWakeup,
 			Valid: false, Status: "n/a",
 			Detail: "无 wakeup / sync 直方图数据",
 		}
 	}
-	s, ok := lerpDown(v, good, poor)
+	s, ok := lerpDown(wakeupsPerHr, good, poor)
+	detail := fmt.Sprintf("App 唤醒 %.0f 次/h（健康≤%.0f，严重≥%.0f）", wakeupsPerHr, good, poor)
+	if syncSecPerHr > 0 {
+		detail += fmt.Sprintf("；Sync 任务时长 %.0f 秒/h", syncSecPerHr)
+	}
 	return Dimension{
 		Key:         "wakeup_sync_freq",
 		Label:       "唤醒/同步频率",
@@ -260,22 +291,18 @@ func wakeupDimension(h presenter.HistogramStats) Dimension {
 		Weight:      wWakeup,
 		Valid:       ok,
 		Status:      statusOf(s),
-		Detail:      fmt.Sprintf("App 唤醒+同步 %.0f 次/h（健康≤%.0f，严重≥%.0f）", v, good, poor),
-		MetricValue: v,
+		Detail:      detail,
+		MetricValue: wakeupsPerHr,
 	}
 }
 
-// stabilityDimension scores app stability from ANR + crash counts. Invalid
-// when the histogram carries no stability counters at all.
+// stabilityDimension scores app stability from ANR + crash counts. The
+// dimension is always scoreable when the histogram is present: ANR/Crash
+// counts are non-negative ints, so there is no "missing data" sentinel to
+// detect here, and a zero count legitimately means "no crashes" (healthy).
+// (The old guard `count < 0` could never fire and was dead code.)
 func stabilityDimension(h presenter.HistogramStats) Dimension {
 	const good, poor = 0.0, 30.0
-	if h.TotalAppANRCount < 0 && h.TotalAppCrashCount < 0 {
-		return Dimension{
-			Key: "app_stability", Label: "App 稳定性", Weight: wStability,
-			Valid: false, Status: "n/a",
-			Detail: "无 ANR / Crash 统计",
-		}
-	}
 	v := float64(h.TotalAppANRCount + h.TotalAppCrashCount)
 	s, ok := lerpDown(v, good, poor)
 	return Dimension{

@@ -625,6 +625,14 @@ func ParseCheckinData(c *bspb.BatteryStats) Checkin {
 		}
 	}
 
+	// Screen-off discharge rate, in %/h.
+	//   GetScreenOff()  → discharge "points", a percentage-scale magnitude
+	//                    (same scale as the *DischargePoints fields above).
+	//   s               → screen-off realtime in MILLISECONDS.
+	// So 60*60*1000 (= 3,600,000) converts ms → hours. This is dimensionally
+	// identical to ModemDischargeRatePerHr, which divides points by
+	// realtime.Hours(). Do NOT "simplify" this to 1000: that would express the
+	// rate per-millisecond and understate it by 3600x.
 	if s := c.System.Battery.GetScreenOffRealtimeMsec(); s > 0 {
 		out.ScreenOffDischargeRatePerHr = MFloat32{V: 60 * 60 * 1000 * c.System.BatteryDischarge.GetScreenOff() / s}
 	}

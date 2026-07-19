@@ -100,6 +100,8 @@ type HealthReport struct {
 	Summary     string
 	Dimensions  []HealthDimension
 	Alerts      []HealthAlert
+	Evaluated   int    // number of dimensions that could be scored
+	Total       int    // total number of dimensions
 	GeneratedAt  string // RFC3339, for display
 }
 

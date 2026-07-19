@@ -247,6 +247,7 @@ img, svg, canvas { max-width: 100%; }
 /* ---------- 健康度卡片暗色配色 + Bootstrap alert/label ---------- */
 [data-theme="dark"] .health-score-meta,
 [data-theme="dark"] .health-summary { color: var(--bh-text-muted); }
+[data-theme="dark"] .health-coverage { color: #777; }
 [data-theme="dark"] .health-dim-detail { color: #888; }
 [data-theme="dark"] .health-grade { background-color: #444; }
 [data-theme="dark"] .label-default { background-color: #555; }
