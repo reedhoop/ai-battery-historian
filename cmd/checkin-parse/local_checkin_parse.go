@@ -85,9 +85,9 @@ func main() {
 	if len(errs) > 0 {
 		log.Fatalf("Could not parse battery stats: %v\n", errs)
 	}
-	fmt.Println("\n################\n")
+	fmt.Print("\n################\n")
 	fmt.Println("Partial Wakelocks")
-	fmt.Println("################\n")
+	fmt.Print("################\n")
 	var pwl []*checkinparse.WakelockInfo
 	for _, app := range stats.App {
 		for _, pw := range app.Wakelock {
@@ -109,7 +109,7 @@ func main() {
 
 	fmt.Println("\n################")
 	fmt.Println("Kernel Wakelocks")
-	fmt.Println("################\n")
+	fmt.Print("################\n")
 	var kwl []*checkinparse.WakelockInfo
 	for _, kw := range stats.System.KernelWakelock {
 		if kw.GetName() != "PowerManagerService.WakeLocks" && kw.GetTimeMsec() > 0 {

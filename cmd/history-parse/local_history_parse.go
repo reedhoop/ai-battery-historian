@@ -102,7 +102,7 @@ func processFile(filePath string, csvWriter *bufio.Writer, isFirstFile bool) str
 			fmt.Println(err.Error())
 		}
 	}
-	fmt.Println("\nNumber of summaries ", len(a), "\n")
+	fmt.Print("\nNumber of summaries ", len(a), "\n")
 	for _, s := range a {
 		s.Print(&rep.OutputBuffer)
 	}
